@@ -2,12 +2,20 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'data/mock_refind_repository.dart';
 import 'data/refind_repository.dart';
+import 'data/supabase_refind_repository.dart';
 
 /// Welche Umsetzung des RefindRepository beim Start aktiv ist
 /// (Konzept 4.1: «eine Einstellung beim Start der App»).
 enum RepositoryMode { mock, supabase }
 
-/// Hier umstellen, sobald SupabaseRefindRepository existiert.
+/// Hier umschalten:
+/// * [RepositoryMode.mock]: Testdaten im Speicher, ohne Internet
+///   (Konten anna/luca/mia@refind.test, Passwort refind123)
+/// * [RepositoryMode.supabase]: echtes Backend, braucht Internet
+///
+/// Nach dem Umschalten genügt Hot Reload nicht, weil main() neu laufen
+/// muss: im Terminal von `flutter run` ein grosses `R` drücken.
+/// Die Tests benutzen immer das Mock.
 const RepositoryMode repositoryMode = RepositoryMode.mock;
 
 /// Verbindung zu unserem Supabase-Projekt. Steht nur hier, nirgends sonst.
@@ -38,6 +46,7 @@ RefindRepository createRepository() {
     case RepositoryMode.mock:
       return MockRefindRepository();
     case RepositoryMode.supabase:
-      throw UnimplementedError('SupabaseRefindRepository folgt im nächsten Schritt.');
+      // initBackend() hat Supabase vorher eingerichtet.
+      return SupabaseRefindRepository(Supabase.instance.client);
   }
 }
