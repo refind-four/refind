@@ -2,9 +2,9 @@
 // (Eingabeprüfung in der Maske) und Datenzugriffsschicht (Prüfung im
 // Repository) dieselben Werte brauchen. So stehen sie nur an einer Stelle.
 
-/// Mindestlänge des Passworts. Im Konzept nicht festgelegt, Annahme des
-/// Teams (siehe ABWEICHUNGEN.md). Supabase muss beim Einrichten auf
-/// denselben Wert gestellt werden (Authentication → Policies).
+/// Mindestlänge des Passworts. Im Konzept nicht festgelegt, vom Team am
+/// 12.11.2026 bestätigt (siehe ABWEICHUNGEN.md). Supabase muss beim
+/// Einrichten auf denselben Wert gestellt werden (Authentication → Policies).
 const int minPasswordLength = 8;
 
 /// Höchstlänge des Passworts. bcrypt, mit dem der Anmeldedienst Passwörter

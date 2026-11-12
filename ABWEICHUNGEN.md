@@ -2,12 +2,14 @@
 
 Bezug: *2_1_Konzeptbericht_refind*, Speicherdatum 29.10.2026.
 Stand: 12.11.2026 (KW 46), nach Anmelden/Registrieren (UC1) und Gesuch erfassen (UC3).
+Alle Team-Entscheide wurden am 12.11.2026 vom Team bestätigt, Vinyl mit
+geänderten Zuständen (Abschnitt 4).
 
 Diese Liste ist die Grundlage für den Realisierungsbericht. Jede Abweichung
 hat einen Status:
 
 - **umgesetzt**: so im Code, Begründung reicht für den Bericht
-- **Team entscheiden**: Annahme im Code, das Team muss sie bestätigen oder ändern
+- **vom Team bestätigt (Datum)**: war eine Annahme, das Team hat sie an diesem Datum bestätigt
 - **offen**: im Konzept verlangt, aber noch nicht umgesetzt
 
 ---
@@ -19,7 +21,7 @@ hat einen Status:
 | 1.1 | Methoden von `signUp` bis `getProfileStats` | Neue Methode `Future<void> resendConfirmation(String email)` | UC1, Ausnahme «Mailadresse noch nicht bestätigt»: Die App soll anbieten, die Mail erneut zu senden. Ohne diese Methode geht das nicht. Die Methode verrät nicht, ob es das Konto gibt. | umgesetzt |
 | 1.2 | Methoden von `signUp` bis `getProfileStats` | Neue Methode `Future<Place> getPlace(int placeId)` | UC3 Schritt 4: Die Region ist mit dem Wohnort vorbelegt. Das Profil kennt nur `cityId`. Um «Bern» anzuzeigen, muss die Ortschaft gelesen werden. | umgesetzt |
 | 1.3 | `RepositoryException` mit vier Arten: keine Verbindung, nicht berechtigt, ungültige Eingabe, Konflikt | Fünfte Art `mailNichtBestaetigt` | Die Maske muss «nicht bestätigt» von «falsches Passwort» unterscheiden, damit sie «Mail erneut senden» nur im richtigen Fall zeigt. | umgesetzt |
-| 1.4 | `getOffers(String wantId, OfferSort sort)`, Werte von `OfferSort` nicht festgelegt | `OfferSort { neueste, guenstigste }` | Kapitel 3.3 verlangt die Sortierung nach Preis (`guenstigste`). `neueste` (nach Datum) ist eine Ergänzung, die noch keine Maske nutzt. | Team entscheiden |
+| 1.4 | `getOffers(String wantId, OfferSort sort)`, Werte von `OfferSort` nicht festgelegt | `OfferSort { neueste, guenstigste }` | Kapitel 3.3 verlangt die Sortierung nach Preis (`guenstigste`). `neueste` (nach Datum) ist eine Ergänzung, die noch keine Maske nutzt. | vom Team bestätigt (12.11.2026) |
 
 ## 2. Fachliche Entitätstypen und Hilfsklassen (Kapitel 2.1, 4.3.2)
 
@@ -39,31 +41,33 @@ dieselben Werte als CHECK-Regeln bzw. in den Auth-Einstellungen stehen.
 
 | Nr. | Feld | Regel im Code | Stelle im Code | Status |
 |---|---|---|---|---|
-| 3.1 | Passwort | mindestens **8**, höchstens **72** Zeichen. 72, weil bcrypt (N-04) nur 72 Bytes berücksichtigt. | `model/account_limits.dart` | Team entscheiden |
-| 3.2 | Anzeigename | Pflicht, höchstens **40** Zeichen | `model/account_limits.dart` | Team entscheiden |
+| 3.1 | Passwort | mindestens **8**, höchstens **72** Zeichen. 72, weil bcrypt (N-04) nur 72 Bytes berücksichtigt. | `model/account_limits.dart` | vom Team bestätigt (12.11.2026) |
+| 3.2 | Anzeigename | Pflicht, höchstens **40** Zeichen | `model/account_limits.dart` | vom Team bestätigt (12.11.2026) |
 | 3.3 | Mailadresse | Format `name@domain.tld` | `application/logic/account_rules.dart` | umgesetzt |
 | 3.4 | Titel des Gesuchs | Pflicht, höchstens **80** Zeichen (Vorschlag aus dem Factsheet) | `WantLimits.maxTitleLength` | umgesetzt |
-| 3.5 | Beschreibung | **freiwillig**, höchstens **1000** Zeichen. F-03 nennt die Beschreibung, die Ausnahmen in UC3 verlangen aber nur Titel, Kategorie und Preisobergrenze. | `WantLimits.maxDescriptionLength` | Team entscheiden |
-| 3.6 | Preisobergrenze | grösser als **CHF 0**, höchstens **CHF 10'000**, Regler in Schritten von **CHF 50**. Abbildung 7 zeigt einen Regler bis CHF 3'200. Das reicht für Möbel nicht (Testdaten: Eames CHF 4'500). | `WantLimits.maxBudgetRappen`, `budgetStepRappen` | Team entscheiden |
+| 3.5 | Beschreibung | **freiwillig**, höchstens **1000** Zeichen. F-03 nennt die Beschreibung, die Ausnahmen in UC3 verlangen aber nur Titel, Kategorie und Preisobergrenze. | `WantLimits.maxDescriptionLength` | vom Team bestätigt (12.11.2026) |
+| 3.6 | Preisobergrenze | grösser als **CHF 0**, höchstens **CHF 10'000**, Regler in Schritten von **CHF 50**. Abbildung 7 zeigt einen Regler bis CHF 3'200. Das reicht für Möbel nicht (Testdaten: Eames CHF 4'500). | `WantLimits.maxBudgetRappen`, `budgetStepRappen` | vom Team bestätigt (12.11.2026) |
 | 3.7 | Kategorie | nur die sechs Kategorien aus Kapitel 2.1 (Whitelist) | `kategorien` in `model/want.dart` | umgesetzt |
-| 3.8 | Umkreis | Auswahl 10/20/30/50/100 km plus Wert aus dem Profil, erlaubt 1–200 km | `WantLimits.radiusOptions`, `maxRadiusKm` | Team entscheiden |
-| 3.9 | Laufzeit | Auswahl **7, 14 oder 30 Tage**, vorbelegt 14 (UC3) | `WantLimits.durationOptions` | Team entscheiden |
+| 3.8 | Umkreis | Auswahl 10/20/30/50/100 km plus Wert aus dem Profil, erlaubt 1–200 km | `WantLimits.radiusOptions`, `maxRadiusKm` | vom Team bestätigt (12.11.2026) |
+| 3.9 | Laufzeit | Auswahl **7, 14 oder 30 Tage**, vorbelegt 14 (UC3) | `WantLimits.durationOptions` | vom Team bestätigt (12.11.2026) |
 
 ## 4. Zustände je Kategorie (Kapitel 2.1)
 
 Das Konzept legt nur die Uhren fest («Original», «Serviciert», «Egal»).
 Die übrigen Kategorien soll das Team «zu Beginn der Realisierung» festlegen.
-Im Code steht ein **Vorschlag** (`zustaende` in `model/want.dart`). Der letzte
-Wert ist jeweils «Egal» und vorausgewählt.
+Das Team hat die Listen am 12.11.2026 festgelegt (`zustaende` in
+`model/want.dart`). Bei Vinyl hat es den Vorschlag geändert: «Sehr gut» wurde
+zu «Gebraucht (leichtes Knistern ok)». Der letzte Wert ist jeweils «Egal» und
+vorausgewählt.
 
 | Kategorie | Zustände | Status |
 |---|---|---|
 | Uhren | Original, Serviciert, Egal | aus dem Konzept |
-| Möbel | Wie neu, Gebraucht, Egal | Team entscheiden |
-| Velo | Fahrbereit, Revisionsbedürftig, Egal | Team entscheiden |
-| Vinyl | Neuwertig, Sehr gut, Egal | Team entscheiden |
-| Kameras | Voll funktionsfähig, Mit Mängeln, Egal | Team entscheiden |
-| Werkzeug | Neu, Gebraucht, Egal | Team entscheiden |
+| Möbel | Wie neu, Gebraucht, Egal | vom Team bestätigt (12.11.2026) |
+| Velo | Fahrbereit, Revisionsbedürftig, Egal | vom Team bestätigt (12.11.2026) |
+| Vinyl | Neuwertig, Gebraucht (leichtes Knistern ok), Egal | vom Team bestätigt (12.11.2026), geändert |
+| Kameras | Voll funktionsfähig, Mit Mängeln, Egal | vom Team bestätigt (12.11.2026) |
+| Werkzeug | Neu, Gebraucht, Egal | vom Team bestätigt (12.11.2026) |
 
 ## 5. Masken und Abläufe (Kapitel 3, UC1, UC3)
 

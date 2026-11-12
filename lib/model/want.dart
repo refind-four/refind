@@ -12,13 +12,14 @@ const List<String> kategorien = [
 ];
 
 /// Zustände je Kategorie (Whitelist). Das Konzept legt nur die Uhren fest
-/// («Original», «Serviciert», «Egal»), die übrigen sind ein Vorschlag für
-/// das Team (siehe ABWEICHUNGEN.md). Der letzte Wert ist die Vorauswahl.
+/// («Original», «Serviciert», «Egal»), die übrigen hat das Team am
+/// 12.11.2026 festgelegt (siehe ABWEICHUNGEN.md, Abschnitt 4).
+/// Der letzte Wert ist die Vorauswahl.
 const Map<String, List<String>> zustaende = {
   'Uhren': ['Original', 'Serviciert', 'Egal'],
   'Möbel': ['Wie neu', 'Gebraucht', 'Egal'],
   'Velo': ['Fahrbereit', 'Revisionsbedürftig', 'Egal'],
-  'Vinyl': ['Neuwertig', 'Sehr gut', 'Egal'],
+  'Vinyl': ['Neuwertig', 'Gebraucht (leichtes Knistern ok)', 'Egal'],
   'Kameras': ['Voll funktionsfähig', 'Mit Mängeln', 'Egal'],
   'Werkzeug': ['Neu', 'Gebraucht', 'Egal'],
 };
@@ -30,7 +31,8 @@ class WantLimits {
   static const int maxDescriptionLength = 1000;
 
   /// Höchste Preisobergrenze: CHF 10'000 in Rappen. Im Konzept offen
-  /// (Factsheet Inputvalidierung: «Maximalpreis noch offen»).
+  /// (Factsheet Inputvalidierung: «Maximalpreis noch offen»), vom Team am
+  /// 12.11.2026 bestätigt.
   static const int maxBudgetRappen = 1000000;
 
   /// Schrittweite des Reglers in Rappen (CHF 50).

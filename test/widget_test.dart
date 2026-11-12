@@ -234,6 +234,26 @@ void main() {
       expect(find.text("bis CHF 5'000 · Bern"), findsOneWidget);
     });
 
+    testWidgets('Vinyl: Zustände vom Team, langer Chip passt auf den Bildschirm',
+        (tester) async {
+      phoneSize(tester);
+      await startApp(tester);
+      await signIn(tester, 'anna@refind.test', 'refind123');
+      await tester.tap(find.text('+ Gesuch aufhängen'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('want-title')), 'Pink Floyd');
+      await tapWeiter(tester);
+      await tester.tap(find.text('Vinyl'));
+      await tapWeiter(tester);
+
+      // Ein Überlauf würde den Test hier mit einer Exception abbrechen.
+      expect(find.text('Neuwertig'), findsOneWidget);
+      expect(find.text('Gebraucht (leichtes Knistern ok)'), findsOneWidget);
+      expect(find.text('Sehr gut'), findsNothing);
+      await tester.tap(find.text('Gebraucht (leichtes Knistern ok)'));
+      await tester.pumpAndSettle();
+    });
+
     testWidgets('Abbrechen in Schritt 1 speichert nichts', (tester) async {
       phoneSize(tester);
       await startApp(tester);
