@@ -1,0 +1,14 @@
+grant select, insert, delete on public.place to authenticated;
+grant select, insert, delete on public.profile to authenticated;
+grant select, insert, delete on public.want to authenticated;
+grant select, insert, delete on public.offer to authenticated;
+grant select, insert, delete on public.photo to authenticated;
+grant select, insert, delete on public.chat_thread to authenticated;
+grant select, insert, delete on public.message to authenticated;
+grant select, insert, delete on public.rating to authenticated;
+grant select, insert, delete on public.push_token to authenticated;
+grant update (handover_at, handover_place) on public.chat_thread to authenticated;
+grant update (price, message) on public.offer to authenticated;
+grant update (avatar_url, radius_km, display_name, city_id) on public.profile to authenticated;
+grant update (created_at, profile_id, token) on public.push_token to authenticated;
+grant update (expires_at, budget_max, description, condition, category, region_id, radius_km, status, title) on public.want to authenticated;
