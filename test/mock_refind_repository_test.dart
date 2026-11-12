@@ -71,4 +71,64 @@ void main() {
     expect(statusById['offer-1'], OfferStatus.angenommen);
     expect(statusById['offer-2'], OfferStatus.abgesagt);
   });
+
+  group('UC3: Gesuch erfassen', () {
+    WantDraft draft({
+      String title = 'Omega Seamaster 166.062',
+      String category = 'Uhren',
+      int budget = 200000,
+      String condition = 'Original',
+    }) =>
+        WantDraft(
+          title: title,
+          category: category,
+          description: 'Gerne mit Box.',
+          budgetMaxRappen: budget,
+          condition: condition,
+          regionId: 1,
+          radiusKm: 25,
+          durationDays: 14,
+        );
+
+    setUp(() => repo.signIn('anna@refind.test', 'refind123'));
+
+    test('TC07: gültiges Gesuch ist aktiv und erscheint in Meine Gesuche',
+        () async {
+      final want = await repo.createWant(draft());
+      expect(want.status, WantStatus.aktiv);
+      expect(want.expiresAt.difference(want.createdAt).inDays, 14);
+      final mine = await repo.getMyWants();
+      expect(mine.first.want.id, want.id); // neuestes zuerst
+      expect(mine.first.region.name, 'Bern');
+    });
+
+    test('TC07: Gesuch erscheint im Feed eines zweiten Kontos', () async {
+      final want = await repo.createWant(draft());
+      await repo.signOut();
+      await repo.signIn('luca@refind.test', 'refind123');
+      final feed = await repo.getFeed(const FeedFilter());
+      expect(feed.map((i) => i.want.id), contains(want.id));
+    });
+
+    // Prüfung «auf dem Server»: auch wenn jemand die Maske umgeht.
+    for (final (name, bad) in [
+      ('ohne Titel', draft(title: '  ')),
+      ('Titel mit 81 Zeichen', draft(title: 'a' * 81)),
+      ('Budget 0', draft(budget: 0)),
+      ('Budget negativ', draft(budget: -500)),
+      ('Budget über Maximum', draft(budget: WantLimits.maxBudgetRappen + 1)),
+      ('unbekannte Kategorie', draft(category: 'Autos')),
+      ('Zustand passt nicht zur Kategorie', draft(condition: 'Fahrbereit')),
+    ]) {
+      test('TC08: $name wird abgelehnt, nichts gespeichert', () async {
+        final before = (await repo.getMyWants()).length;
+        await expectLater(
+          repo.createWant(bad),
+          throwsA(isA<RepositoryException>().having(
+              (e) => e.kind, 'kind', RepositoryErrorKind.ungueltigeEingabe)),
+        );
+        expect((await repo.getMyWants()).length, before);
+      });
+    }
+  });
 }

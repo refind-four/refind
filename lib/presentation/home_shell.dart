@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../application/services/want_service.dart';
+import '../application/state/my_wants_provider.dart';
 import 'account/profile_screen.dart';
 import 'chat/chat_list_screen.dart';
 import 'discover/discover_screen.dart';
@@ -28,6 +31,15 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    // MyWantsProvider lebt nur, solange jemand angemeldet ist. Nach dem
+    // Abmelden verschwindet HomeShell und mit ihr die Liste des Kontos.
+    return ChangeNotifierProvider(
+      create: (context) => MyWantsProvider(context.read<WantService>())..load(),
+      child: _buildScaffold(),
+    );
+  }
+
+  Widget _buildScaffold() {
     return Scaffold(
       body: IndexedStack(index: _index, children: _tabs),
       bottomNavigationBar: NavigationBar(

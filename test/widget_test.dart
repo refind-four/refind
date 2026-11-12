@@ -133,20 +133,122 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('Gesuch aufhängen hat vier Schritte', (tester) async {
-    await startApp(tester);
-    await signIn(tester, 'anna@refind.test', 'refind123');
+  group('UC3: Gesuch erfassen', () {
+    // Bildschirm in Handygrösse (360 x 780), wie ein Android-Gerät.
+    void phoneSize(WidgetTester tester) {
+      tester.view.physicalSize = const Size(1080, 2340);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+    }
 
-    await tester.tap(find.text('Gesuch aufhängen'));
-    await tester.pumpAndSettle();
-    for (final title in ['Titel', 'Kategorie und Beschreibung', 'Details']) {
-      expect(find.text(title), findsOneWidget);
-      await tester.tap(find.text('Weiter'));
+    Future<void> tapWeiter(WidgetTester tester) async {
+      await tester.tap(find.widgetWithText(FilledButton, 'Weiter'));
       await tester.pumpAndSettle();
     }
-    expect(find.text('Gesuch ist live'), findsOneWidget);
-    await tester.tap(find.text('Zu meinen Gesuchen'));
-    await tester.pumpAndSettle();
-    expect(find.text('Meine Gesuche'), findsOneWidget);
+
+    testWidgets('TC07/TC08: Pflichtfelder markiert, dann gespeichert',
+        (tester) async {
+      phoneSize(tester);
+      await startApp(tester);
+      await signIn(tester, 'anna@refind.test', 'refind123');
+      await tester.tap(find.text('+ Gesuch aufhängen'));
+      await tester.pumpAndSettle();
+
+      // Schritt 1: Titel
+      expect(find.text('Was suchst du?'), findsOneWidget);
+      expect(find.text('SCHRITT 1 / 4'), findsOneWidget);
+      await tapWeiter(tester);
+      expect(find.text('Bitte gib einen Titel ein.'), findsOneWidget);
+      expect(find.text('Was suchst du?'), findsOneWidget); // bleibt im Schritt
+
+      await tester.enterText(find.byKey(const Key('want-title')), 'a' * 81);
+      await tapWeiter(tester);
+      expect(find.text('Der Titel darf höchstens 80 Zeichen lang sein (jetzt 81).'),
+          findsOneWidget);
+
+      await tester.enterText(
+          find.byKey(const Key('want-title')), 'Omega Seamaster 166.062');
+      await tapWeiter(tester);
+
+      // Schritt 2: Kategorie und Beschreibung
+      expect(find.text('Worum geht es genau?'), findsOneWidget);
+      await tapWeiter(tester);
+      expect(find.text('Bitte wähle eine Kategorie.'), findsOneWidget);
+      await tester.tap(find.text('Uhren'));
+      await tester.enterText(
+          find.byKey(const Key('want-description')), 'Gerne mit Box und Papieren.');
+      await tapWeiter(tester);
+
+      // Schritt 3: Details, Region aus dem Wohnort vorbelegt
+      expect(find.text('Wie viel, welcher Zustand?'), findsOneWidget);
+      expect(find.text('Bern + 25 km'), findsOneWidget);
+      expect(find.text('14 Tage sichtbar'), findsOneWidget);
+      expect(find.text('CHF 0'), findsWidgets);
+      await tapWeiter(tester);
+      expect(find.text('Bitte lege eine Preisobergrenze über CHF 0 fest.'),
+          findsOneWidget);
+
+      // Region und Umkreis über das Sheet ändern, dann wieder zurück
+      await tester.tap(find.byKey(const Key('want-region')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('region-search')), 'Thun');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('3600 Thun'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('50 km'));
+      await tester.tap(find.text('Übernehmen'));
+      await tester.pumpAndSettle();
+      expect(find.text('Thun + 50 km'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('want-region')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('region-search')), '3011');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('3011 Bern'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('25 km'));
+      await tester.tap(find.text('Übernehmen'));
+      await tester.pumpAndSettle();
+      expect(find.text('Bern + 25 km'), findsOneWidget);
+
+      // Laufzeit ändern
+      await tester.tap(find.byKey(const Key('want-duration')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('30 Tage'));
+      await tester.pumpAndSettle();
+      expect(find.text('30 Tage sichtbar'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('want-budget'))); // Mitte = CHF 5'000
+      await tester.pumpAndSettle();
+      expect(find.text("CHF 5'000"), findsOneWidget);
+      await tester.tap(find.text('Original'));
+      await tapWeiter(tester);
+
+      // Schritt 4: Gesuch ist live
+      expect(find.text('Dein Gesuch hängt.'), findsOneWidget);
+      await tester.tap(find.text('Zu meinen Gesuchen'));
+      await tester.pumpAndSettle();
+
+      // Meine Gesuche zeigt das neue Gesuch zuoberst
+      expect(find.text('Omega Seamaster 166.062'), findsOneWidget);
+      expect(find.text("bis CHF 5'000 · Bern"), findsOneWidget);
+    });
+
+    testWidgets('Abbrechen in Schritt 1 speichert nichts', (tester) async {
+      phoneSize(tester);
+      await startApp(tester);
+      await signIn(tester, 'anna@refind.test', 'refind123');
+      final cardsBefore = find.textContaining('bis CHF').evaluate().length;
+
+      await tester.tap(find.text('+ Gesuch aufhängen'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('want-title')), 'Wird verworfen');
+      await tester.tap(find.text('Abbrechen'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Meine Gesuche'), findsOneWidget);
+      expect(find.text('Wird verworfen'), findsNothing);
+      expect(find.textContaining('bis CHF').evaluate().length, cardsBefore);
+    });
   });
 }

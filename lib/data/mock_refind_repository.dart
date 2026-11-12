@@ -103,12 +103,30 @@ class MockRefindRepository implements RefindRepository {
       _messages.where((m) => m.threadId == threadId).toList()
         ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
+  /// Prüfung «auf dem Server» (Factsheet Inputvalidierung): dieselben Regeln
+  /// wie in der Maske, weil man die App umgehen kann. Später übernehmen das
+  /// die CHECK-Regeln in der Datenbank bei Supabase.
   void _validateDraft(WantDraft d) {
-    if (d.title.trim().isEmpty) _invalid('Bitte einen Titel eingeben.');
+    final title = d.title.trim();
+    if (title.isEmpty || title.length > WantLimits.maxTitleLength) {
+      _invalid('Der Titel muss 1 bis ${WantLimits.maxTitleLength} Zeichen lang sein.');
+    }
     if (!kategorien.contains(d.category)) _invalid('Unbekannte Kategorie.');
-    if (d.budgetMaxRappen <= 0) _invalid('Das Budget muss grösser als 0 sein.');
-    if (d.radiusKm <= 0) _invalid('Der Umkreis muss grösser als 0 sein.');
-    if (d.durationDays <= 0) _invalid('Die Laufzeit muss grösser als 0 sein.');
+    if (d.description.trim().length > WantLimits.maxDescriptionLength) {
+      _invalid('Die Beschreibung ist zu lang.');
+    }
+    if (d.budgetMaxRappen <= 0 || d.budgetMaxRappen > WantLimits.maxBudgetRappen) {
+      _invalid('Die Preisobergrenze liegt ausserhalb des erlaubten Bereichs.');
+    }
+    if (!(zustaende[d.category] ?? const []).contains(d.condition)) {
+      _invalid('Unbekannter Zustand.');
+    }
+    if (d.radiusKm < 1 || d.radiusKm > WantLimits.maxRadiusKm) {
+      _invalid('Der Umkreis liegt ausserhalb des erlaubten Bereichs.');
+    }
+    if (!WantLimits.durationOptions.contains(d.durationDays)) {
+      _invalid('Unbekannte Laufzeit.');
+    }
     _place(d.regionId);
   }
 
@@ -258,6 +276,13 @@ class MockRefindRepository implements RefindRepository {
         .toList();
   }
 
+  @override
+  Future<Place> getPlace(int placeId) async {
+    await _wait();
+    _me;
+    return _place(placeId);
+  }
+
   // ---------------------------------------------------------------------
   // Gesuche (UC3, UC4)
   // ---------------------------------------------------------------------
@@ -298,6 +323,7 @@ class MockRefindRepository implements RefindRepository {
           newOfferCount: _offers
               .where((o) => o.wantId == w.id && o.status == OfferStatus.neu)
               .length,
+          region: _place(w.regionId),
         ),
     ];
   }
@@ -691,7 +717,7 @@ class MockRefindRepository implements RefindRepository {
           'UK-Erstpressung 1979, Cover ohne Risse.', 15000, 'Sehr gut', 3,
           daysAgo: 4),
       want('want-5', 'user-mia', 'Leica M6', 'Kameras',
-          'Body reicht, Objektiv wäre ein Bonus.', 220000, 'Gebraucht', 3,
+          'Body reicht, Objektiv wäre ein Bonus.', 220000, 'Voll funktionsfähig', 3,
           daysAgo: 0),
       want('want-6', 'user-luca', 'Makita Akkuschrauber 18 V', 'Werkzeug',
           'Mit zwei Akkus und Ladegerät.', 12000, 'Gebraucht', 4,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../application/services/auth_service.dart';
+import '../application/services/want_service.dart';
 import '../application/state/session_provider.dart';
 import '../data/refind_repository.dart';
 import 'account/login_screen.dart';
@@ -19,8 +20,15 @@ class RefindApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => SessionProvider(AuthService(repository))..restore(),
+    // MultiProvider stellt mehrere Objekte für alle Masken bereit.
+    // Eine Maske holt sie mit context.read<WantService>() usw.
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => SessionProvider(AuthService(repository))..restore(),
+        ),
+        Provider(create: (_) => WantService(repository)),
+      ],
       child: MaterialApp(
         title: 'refind',
         debugShowCheckedModeBanner: false,

@@ -180,8 +180,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 24),
                         BusyButton(label: 'Anmelden', busy: _busy, onPressed: _signIn),
                         const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        // Wrap statt Row: bricht bei grosser Schrift um,
+                        // statt rechts überzulaufen.
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             const Text(
                               'Noch kein Konto?',

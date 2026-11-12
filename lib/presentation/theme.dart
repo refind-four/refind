@@ -90,5 +90,21 @@ ThemeData buildRefindTheme() {
       backgroundColor: RefindColors.background,
       showDragHandle: true,
     ),
+    // Auswahl-Chips wie «Uhren», «Möbel»: gewählt schwarz, sonst weiss.
+    chipTheme: ChipThemeData(
+      backgroundColor: Colors.white,
+      selectedColor: RefindColors.ink,
+      labelStyle: const TextStyle(color: RefindColors.ink),
+      secondaryLabelStyle: const TextStyle(color: Colors.white),
+      showCheckmark: false,
+      side: const BorderSide(color: Color(0xFFDDDAD5)),
+      shape: const StadiumBorder(),
+    ),
+    sliderTheme: const SliderThemeData(
+      activeTrackColor: RefindColors.ink,
+      inactiveTrackColor: Color(0xFFD5D2CC),
+      thumbColor: RefindColors.ink,
+      trackHeight: 2,
+    ),
   );
 }

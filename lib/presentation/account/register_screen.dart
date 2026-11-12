@@ -92,6 +92,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               style: TextButton.styleFrom(
                                 foregroundColor: RefindColors.muted,
                                 padding: EdgeInsets.zero,
+                                minimumSize: const Size(0, 48),
                               ),
                               onPressed: () => Navigator.of(context).pop(),
                               child: const Text('Zurück'),

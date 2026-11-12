@@ -42,17 +42,21 @@ class FeedFilter {
   final int? radiusKm;
 }
 
-/// Eigenes Gesuch mit Zählern für Angebote (UC4).
+/// Eigenes Gesuch mit Zählern für Angebote und Ortschaft (UC4).
 class WantSummary {
   const WantSummary({
     required this.want,
     required this.offerCount,
     required this.newOfferCount,
+    required this.region,
   });
 
   final Want want;
   final int offerCount;
   final int newOfferCount;
+
+  /// Region des Gesuchs, damit die Karte «Bern» statt einer Nummer zeigt.
+  final Place region;
 }
 
 /// Gesuch im Feed mit Name des Käufers und Ortschaft (UC5).

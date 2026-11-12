@@ -45,6 +45,10 @@ abstract interface class RefindRepository {
   /// Ortschaften für Wohnort und Region suchen.
   Future<List<Place>> searchPlaces(String query);
 
+  /// Eine Ortschaft lesen, z.B. den Wohnort für die Vorbelegung in UC3.
+  /// Ergänzung zu Konzept 4.3.2.
+  Future<Place> getPlace(int placeId);
+
   // --- Gesuche (UC3, UC4) ---
 
   Future<Want> createWant(WantDraft draft);

@@ -11,6 +11,41 @@ const List<String> kategorien = [
   'Werkzeug',
 ];
 
+/// Zustände je Kategorie (Whitelist). Das Konzept legt nur die Uhren fest
+/// («Original», «Serviciert», «Egal»), die übrigen sind ein Vorschlag für
+/// das Team (siehe ABWEICHUNGEN.md). Der letzte Wert ist die Vorauswahl.
+const Map<String, List<String>> zustaende = {
+  'Uhren': ['Original', 'Serviciert', 'Egal'],
+  'Möbel': ['Wie neu', 'Gebraucht', 'Egal'],
+  'Velo': ['Fahrbereit', 'Revisionsbedürftig', 'Egal'],
+  'Vinyl': ['Neuwertig', 'Sehr gut', 'Egal'],
+  'Kameras': ['Voll funktionsfähig', 'Mit Mängeln', 'Egal'],
+  'Werkzeug': ['Neu', 'Gebraucht', 'Egal'],
+};
+
+/// Grenzwerte für Gesuche. Liegen im Paket model, weil Maske (Anwendungs-
+/// schicht) und Repository (Datenzugriffsschicht) dieselben Werte prüfen.
+class WantLimits {
+  static const int maxTitleLength = 80;
+  static const int maxDescriptionLength = 1000;
+
+  /// Höchste Preisobergrenze: CHF 10'000 in Rappen. Im Konzept offen
+  /// (Factsheet Inputvalidierung: «Maximalpreis noch offen»).
+  static const int maxBudgetRappen = 1000000;
+
+  /// Schrittweite des Reglers in Rappen (CHF 50).
+  static const int budgetStepRappen = 5000;
+
+  /// UC3: Laufzeit vorbelegt mit 14 Tagen.
+  static const int defaultDurationDays = 14;
+  static const List<int> durationOptions = [7, 14, 30];
+  static const List<int> radiusOptions = [10, 20, 30, 50, 100];
+
+  /// Grösster erlaubter Umkreis. Der Profilwert (z.B. 25 km) muss nicht in
+  /// [radiusOptions] stehen, aber in diesem Bereich liegen.
+  static const int maxRadiusKm = 200;
+}
+
 /// Gesuch eines Käufers (Konzept 2.1). Beträge in ganzen Rappen.
 class Want {
   const Want({
