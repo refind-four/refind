@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import '../model/model.dart';
+import 'input_checks.dart';
 import 'refind_repository.dart';
 import 'repository_exception.dart';
 
@@ -103,30 +104,10 @@ class MockRefindRepository implements RefindRepository {
       _messages.where((m) => m.threadId == threadId).toList()
         ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
-  /// Prüfung «auf dem Server» (Factsheet Inputvalidierung): dieselben Regeln
-  /// wie in der Maske, weil man die App umgehen kann. Später übernehmen das
-  /// die CHECK-Regeln in der Datenbank bei Supabase.
+  /// Prüfung «auf dem Server» (Factsheet Inputvalidierung), gemeinsam mit
+  /// SupabaseRefindRepository in input_checks.dart.
   void _validateDraft(WantDraft d) {
-    final title = d.title.trim();
-    if (title.isEmpty || title.length > WantLimits.maxTitleLength) {
-      _invalid('Der Titel muss 1 bis ${WantLimits.maxTitleLength} Zeichen lang sein.');
-    }
-    if (!kategorien.contains(d.category)) _invalid('Unbekannte Kategorie.');
-    if (d.description.trim().length > WantLimits.maxDescriptionLength) {
-      _invalid('Die Beschreibung ist zu lang.');
-    }
-    if (d.budgetMaxRappen <= 0 || d.budgetMaxRappen > WantLimits.maxBudgetRappen) {
-      _invalid('Die Preisobergrenze liegt ausserhalb des erlaubten Bereichs.');
-    }
-    if (!(zustaende[d.category] ?? const []).contains(d.condition)) {
-      _invalid('Unbekannter Zustand.');
-    }
-    if (d.radiusKm < 1 || d.radiusKm > WantLimits.maxRadiusKm) {
-      _invalid('Der Umkreis liegt ausserhalb des erlaubten Bereichs.');
-    }
-    if (!WantLimits.durationOptions.contains(d.durationDays)) {
-      _invalid('Unbekannte Laufzeit.');
-    }
+    checkWantDraft(d);
     _place(d.regionId);
   }
 
@@ -140,17 +121,8 @@ class MockRefindRepository implements RefindRepository {
     final name = displayName.trim();
     final mail = email.trim().toLowerCase();
     // Dieselben Regeln wie in der Maske. Das Repository prüft noch einmal,
-    // weil man Prüfungen in der App umgehen kann (später: Supabase).
-    if (name.isEmpty || name.length > maxDisplayNameLength) {
-      _invalid('Der Anzeigename muss 1 bis $maxDisplayNameLength Zeichen lang sein.');
-    }
-    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(mail)) {
-      _invalid('Bitte gib eine gültige Mailadresse ein.');
-    }
-    if (password.length < minPasswordLength || password.length > maxPasswordLength) {
-      _invalid('Das Passwort muss $minPasswordLength bis $maxPasswordLength '
-          'Zeichen lang sein.');
-    }
+    // weil man Prüfungen in der App umgehen kann.
+    checkSignUp(name, mail, password);
     if (_credentials.containsKey(mail)) {
       // UC1: nichts über das bestehende Konto verraten.
       _conflict('Die Registrierung ist mit diesen Angaben nicht möglich.');
