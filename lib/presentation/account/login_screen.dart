@@ -28,6 +28,10 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
   String? _info;
 
+  /// Nach dem ersten Versuch prüft jedes Feld bei jeder Eingabe neu.
+  /// So verschwindet eine Fehlermeldung, sobald das Feld stimmt.
+  AutovalidateMode _autovalidate = AutovalidateMode.disabled;
+
   /// UC1 Ausnahme: Mailadresse noch nicht bestätigt → erneut senden anbieten.
   bool _offerResend = false;
 
@@ -39,7 +43,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _signIn() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      setState(() => _autovalidate = AutovalidateMode.onUserInteraction);
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -59,6 +66,8 @@ class _LoginScreenState extends State<LoginScreen> {
           _offerResend = e.kind == RepositoryErrorKind.mailNichtBestaetigt;
         });
       }
+    } catch (_) {
+      if (mounted) setState(() => _error = unexpectedErrorMessage);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -81,6 +90,8 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         setState(() => _error = e.message);
       }
+    } catch (_) {
+      if (mounted) setState(() => _error = unexpectedErrorMessage);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -109,6 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Form(
           key: _formKey,
+          autovalidateMode: _autovalidate,
           child: AutofillGroup(
             // CustomScrollView + SliverFillRemaining: Der Button bleibt unten,
             // und mit offener Tastatur lässt sich trotzdem scrollen.

@@ -1,6 +1,7 @@
 // Sammeldatei: `import 'package:refind/model/model.dart';` holt alle
 // Klassen der Entitätstypen auf einmal.
 
+export 'account_limits.dart';
 export 'chat_thread.dart';
 export 'message.dart';
 export 'offer.dart';

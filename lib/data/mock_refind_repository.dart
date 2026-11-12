@@ -121,12 +121,17 @@ class MockRefindRepository implements RefindRepository {
     await _wait();
     final name = displayName.trim();
     final mail = email.trim().toLowerCase();
-    if (name.isEmpty) _invalid('Bitte einen Anzeigenamen eingeben.');
-    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(mail)) {
-      _invalid('Bitte eine gültige Mailadresse eingeben.');
+    // Dieselben Regeln wie in der Maske. Das Repository prüft noch einmal,
+    // weil man Prüfungen in der App umgehen kann (später: Supabase).
+    if (name.isEmpty || name.length > maxDisplayNameLength) {
+      _invalid('Der Anzeigename muss 1 bis $maxDisplayNameLength Zeichen lang sein.');
     }
-    if (password.length < 8) {
-      _invalid('Das Passwort muss mindestens 8 Zeichen lang sein.');
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(mail)) {
+      _invalid('Bitte gib eine gültige Mailadresse ein.');
+    }
+    if (password.length < minPasswordLength || password.length > maxPasswordLength) {
+      _invalid('Das Passwort muss $minPasswordLength bis $maxPasswordLength '
+          'Zeichen lang sein.');
     }
     if (_credentials.containsKey(mail)) {
       // UC1: nichts über das bestehende Konto verraten.

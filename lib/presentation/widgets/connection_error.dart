@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+/// Meldung für Fehler, mit denen niemand gerechnet hat (Programmfehler).
+const String unexpectedErrorMessage =
+    'Etwas ist schiefgelaufen. Bitte versuche es nochmals.';
+
 /// Fehlerfall für alle Anwendungsfälle (Konzept 2.3): Fehlt die Verbindung,
 /// zeigt die App eine Meldung, behält die Eingaben und bietet an, die Aktion
 /// zu wiederholen.

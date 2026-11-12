@@ -61,6 +61,27 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Bitte gib deine Mailadresse ein.'), findsOneWidget);
     expect(find.text('Bitte gib dein Passwort ein.'), findsOneWidget);
+
+    // Sobald das Feld stimmt, verschwindet die Meldung ohne neuen Klick.
+    await tester.enterText(find.byKey(const Key('login-email')), 'anna@refind.test');
+    await tester.pumpAndSettle();
+    expect(find.text('Bitte gib deine Mailadresse ein.'), findsNothing);
+    expect(find.text('Bitte gib dein Passwort ein.'), findsOneWidget);
+  });
+
+  testWidgets('UC1: zu kurzes Passwort beim Registrieren', (tester) async {
+    await startApp(tester);
+    await tester.tap(find.text('Registrieren'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('register-name')), 'Jan Roth');
+    await tester.enterText(find.byKey(const Key('register-email')), 'jan.roth@beispiel.ch');
+    await tester.enterText(find.byKey(const Key('register-password')), 'kurz12');
+    await tester.enterText(find.byKey(const Key('register-repeat')), 'kurz12');
+    await tester.tap(find.widgetWithText(FilledButton, 'Konto anlegen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Das Passwort muss mindestens 8 Zeichen lang sein (jetzt 6).'),
+        findsOneWidget);
+    expect(find.text('Konto anlegen.'), findsOneWidget); // Maske bleibt offen
   });
 
   testWidgets('UC1: registrieren, bestätigen, anmelden', (tester) async {

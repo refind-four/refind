@@ -28,6 +28,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _busy = false;
   String? _error;
 
+  /// Nach dem ersten Versuch prüft jedes Feld bei jeder Eingabe neu.
+  AutovalidateMode _autovalidate = AutovalidateMode.disabled;
+
   @override
   void dispose() {
     _name.dispose();
@@ -38,7 +41,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _signUp() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      setState(() => _autovalidate = AutovalidateMode.onUserInteraction);
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -56,6 +62,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       } else {
         setState(() => _error = e.message);
       }
+    } catch (_) {
+      if (mounted) setState(() => _error = unexpectedErrorMessage);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -67,6 +75,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       body: SafeArea(
         child: Form(
           key: _formKey,
+          autovalidateMode: _autovalidate,
           child: AutofillGroup(
             child: CustomScrollView(
               slivers: [
