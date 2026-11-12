@@ -16,7 +16,7 @@ enum RepositoryMode { mock, supabase }
 /// Nach dem Umschalten genügt Hot Reload nicht, weil main() neu laufen
 /// muss: im Terminal von `flutter run` ein grosses `R` drücken.
 /// Die Tests benutzen immer das Mock.
-const RepositoryMode repositoryMode = RepositoryMode.mock;
+const RepositoryMode repositoryMode = RepositoryMode.supabase;
 
 /// Verbindung zu unserem Supabase-Projekt. Steht nur hier, nirgends sonst.
 ///
