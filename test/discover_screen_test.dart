@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:refind/data/mock_refind_repository.dart';
+import 'package:flutter/rendering.dart';
+import 'package:refind/model/model.dart';
 import 'package:refind/presentation/app.dart';
+import 'package:refind/presentation/discover/feed_card.dart';
+import 'package:refind/presentation/theme.dart';
 
 /// Kleines Handy (360 × 780 dp), damit Überläufe auffallen.
 void phoneSize(WidgetTester tester) {
@@ -159,5 +163,62 @@ void main() {
       // Sheet bleibt offen, Feed unverändert
       expect(find.text('Suchen und filtern'), findsOneWidget);
     });
+  });
+
+  testWidgets('Region auf der Karte ist ganz lesbar, auch wenn sie lang ist',
+      (tester) async {
+    phoneSize(tester);
+    final item = FeedItem(
+      want: Want(
+        id: 'w1',
+        ownerId: 'anna',
+        title: 'Leica Q2',
+        category: 'Kameras',
+        description: '',
+        budgetMaxRappen: 380000,
+        condition: 'Egal',
+        regionId: 1,
+        radiusKm: 30,
+        createdAt: DateTime(2026, 11, 18),
+        expiresAt: DateTime(2026, 11, 25),
+        status: WantStatus.aktiv,
+      ),
+      buyerName: 'Anna',
+      region: const Place(
+          id: 1, plz: 8645, name: 'Rapperswil-Jona Kempraten-Lenggis', e: 0, n: 0),
+    );
+    await tester.pumpWidget(MaterialApp(
+      theme: buildRefindTheme(),
+      home: Scaffold(
+        body: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: FeedCard(item: item, now: DateTime(2026, 11, 19), onOffer: () {}),
+        ),
+      ),
+    ));
+
+    expect(find.text("bis CHF 3'800"), findsOneWidget);
+    final region = find.byKey(const Key('feed-region-w1'));
+    expect(tester.widget<Text>(region).data, 'Rapperswil-Jona Kempraten-Lenggis');
+    // nicht abgeschnitten: keine Auslassungspunkte, Text passt in die Karte
+    expect(tester.widget<Text>(region).overflow, isNot(TextOverflow.ellipsis));
+    final paragraph = tester.renderObject<RenderParagraph>(
+        find.descendant(of: region, matching: find.byType(RichText)));
+    expect(paragraph.didExceedMaxLines, isFalse);
+    expect(find.text('Angebot senden'), findsOneWidget);
+  });
+
+  testWidgets('Navigation: ENTDECKEN hat ein Kompass-Icon wie die anderen',
+      (tester) async {
+    await openDiscover(tester);
+    // aktiv: gefülltes Icon, wie bei den anderen Bereichen
+    expect(find.byIcon(Icons.explore), findsOneWidget);
+    expect(find.byIcon(Icons.circle), findsNothing);
+
+    await tester.tap(find.text('GESUCHE'));
+    await tester.pumpAndSettle();
+    // inaktiv: Umriss
+    expect(find.byIcon(Icons.explore_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.description), findsOneWidget);
   });
 }

@@ -52,8 +52,9 @@ class _HomeShellState extends State<HomeShell> {
             label: 'GESUCHE',
           ),
           NavigationDestination(
-            icon: Icon(Icons.circle_outlined),
-            selectedIcon: Icon(Icons.circle),
+            // Kompass: Gesuche anderer entdecken
+            icon: Icon(Icons.explore_outlined),
+            selectedIcon: Icon(Icons.explore),
             label: 'ENTDECKEN',
           ),
           NavigationDestination(

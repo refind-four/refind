@@ -75,11 +75,25 @@ class FeedCard extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               children: [
+                // Preis und Region je in eigener Zeile. Die Region darf
+                // umbrechen und wird nie abgeschnitten (z.B. «Muri bei Bern»).
                 Expanded(
-                  child: Text(
-                    'bis ${formatChf(want.budgetMaxRappen)} · ${item.region.name}',
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'bis ${formatChf(want.budgetMaxRappen)}',
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        item.region.name,
+                        key: Key('feed-region-${want.id}'),
+                        style: const TextStyle(
+                            fontSize: 13, color: RefindColors.muted),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 8),
