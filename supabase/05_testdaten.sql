@@ -10,7 +10,7 @@
 -- unverändert. Die Orte werden nur ergänzt, wenn sie noch fehlen.
 --
 -- Beträge in Rappen (CHF 1.00 = 100).
--- Am Schluss zeigt eine Tabelle alle Gesuche der Testkonten (9 Zeilen).
+-- Am Schluss zeigt eine Tabelle alle Gesuche der Testkonten (10 Zeilen).
 
 -- ---------------------------------------------------------------------
 -- 1. Vorläufige Ortschaften (aus 05_orte_vorlaeufig.sql übernommen)
@@ -199,7 +199,7 @@ begin
          (v_want, v_cara, 375000, 'Q2 wie neu, Garantie bis 2027.',
           now() - interval '2 hours', 'neu');
 
-  -- 3c. «Rolex Datejust 36» von Anna, pausiert
+  -- 3c. «Rolex Datejust 36» von Anna, aktiv
   insert into public.want (owner_id, title, category, description, budget_max,
                            condition, region_id, radius_km, created_at,
                            expires_at, status)
@@ -209,28 +209,40 @@ begin
           'Serviciert', v_bern, 50,
           now() - interval '5 days',
           now() - interval '5 days' + interval '30 days',
-          'pausiert');
+          'aktiv');
 
-  -- 3d. «Eames Lounge Chair» von Ben, Budget CHF 2'000,
-  --     Angebote CHF 1'720 / 1'950 / 2'100 (das letzte liegt über dem Budget)
+  -- 3c2. «Fujifilm X100V» von Anna, pausiert
   insert into public.want (owner_id, title, category, description, budget_max,
                            condition, region_id, radius_km, created_at,
                            expires_at, status)
-  values (v_ben, 'Eames Lounge Chair', 'Möbel',
+  values (v_anna, 'Fujifilm X100V', 'Kameras',
+          'Silber, gerne mit Originalverpackung.',
+          130000,                          -- CHF 1''300
+          'Voll funktionsfähig', v_bern, 30,
+          now() - interval '6 days',
+          now() - interval '6 days' + interval '14 days',
+          'pausiert');
+
+  -- 3d. «Eames Lounge Chair» von Anna, Budget CHF 2'000, alle Angebote neu:
+  --     Ben CHF 1'720, Cara CHF 1'950, Ben CHF 2'100 (liegt über dem Budget)
+  insert into public.want (owner_id, title, category, description, budget_max,
+                           condition, region_id, radius_km, created_at,
+                           expires_at, status)
+  values (v_anna, 'Eames Lounge Chair', 'Möbel',
           'Mit Ottomane, Leder schwarz.',
           200000,                          -- CHF 2''000
-          'Gebraucht', v_zuerich, 50,
+          'Gebraucht', v_bern, 50,
           now() - interval '4 days',
           now() - interval '4 days' + interval '14 days',
           'aktiv')
   returning id into v_want;
 
   insert into public.offer (want_id, seller_id, price, message, created_at, status)
-  values (v_want, v_anna, 172000, 'Lizenzversion, Leder mit Gebrauchsspuren.',
+  values (v_want, v_ben,  172000, 'Lizenzversion, Leder mit Gebrauchsspuren.',
           now() - interval '3 days', 'neu'),
          (v_want, v_cara, 195000, 'Original Vitra, 2015 gekauft.',
-          now() - interval '2 days', 'gesehen'),
-         (v_want, v_cara, 210000, 'Original Vitra, wie neu, mit Rechnung.',
+          now() - interval '2 days', 'neu'),
+         (v_want, v_ben,  210000, 'Original Vitra, wie neu, mit Rechnung.',
           now() - interval '5 hours', 'neu');
 
   -- 3e. Abgelaufenes Gesuch von Anna (Laufzeit 14 Tage, vor 6 Tagen abgelaufen)
