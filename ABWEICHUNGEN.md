@@ -1,8 +1,9 @@
 # Abweichungen vom Konzeptbericht
 
 Bezug: *2_1_Konzeptbericht_refind*, Speicherdatum 29.10.2026.
-Stand: 12.11.2026 (KW 46), nach Anmelden/Registrieren (UC1), Gesuch erfassen (UC3)
-und SupabaseRefindRepository für UC1 und UC3 (Abschnitt 8).
+Stand: 19.11.2026 (KW 47), nach Anmelden/Registrieren (UC1), Gesuch erfassen (UC3),
+SupabaseRefindRepository für UC1 und UC3 (Abschnitt 8) sowie Angebot senden,
+ansehen und annehmen (UC6, UC7, Abschnitt 9).
 Alle Team-Entscheide wurden am 12.11.2026 vom Team bestätigt, Vinyl mit
 geänderten Zuständen (Abschnitt 4).
 
@@ -22,7 +23,7 @@ hat einen Status:
 | 1.1 | Methoden von `signUp` bis `getProfileStats` | Neue Methode `Future<void> resendConfirmation(String email)` | UC1, Ausnahme «Mailadresse noch nicht bestätigt»: Die App soll anbieten, die Mail erneut zu senden. Ohne diese Methode geht das nicht. Die Methode verrät nicht, ob es das Konto gibt. | umgesetzt |
 | 1.2 | Methoden von `signUp` bis `getProfileStats` | Neue Methode `Future<Place> getPlace(int placeId)` | UC3 Schritt 4: Die Region ist mit dem Wohnort vorbelegt. Das Profil kennt nur `cityId`. Um «Bern» anzuzeigen, muss die Ortschaft gelesen werden. | umgesetzt |
 | 1.3 | `RepositoryException` mit vier Arten: keine Verbindung, nicht berechtigt, ungültige Eingabe, Konflikt | Fünfte Art `mailNichtBestaetigt` | Die Maske muss «nicht bestätigt» von «falsches Passwort» unterscheiden, damit sie «Mail erneut senden» nur im richtigen Fall zeigt. | umgesetzt |
-| 1.4 | `getOffers(String wantId, OfferSort sort)`, Werte von `OfferSort` nicht festgelegt | `OfferSort { neueste, guenstigste }` | Kapitel 3.3 verlangt die Sortierung nach Preis (`guenstigste`). `neueste` (nach Datum) ist eine Ergänzung, die noch keine Maske nutzt. | vom Team bestätigt (12.11.2026) |
+| 1.4 | `getOffers(String wantId, OfferSort sort)`, Werte von `OfferSort` nicht festgelegt | `OfferSort { neueste, guenstigste }` | Kapitel 3.3 verlangt die Sortierung nach Preis (`guenstigste`). `neueste` (nach Datum) ist eine Ergänzung. Seit 19.11.2026 kann man in «Gesuch Detail · Angebote» zwischen beiden wählen, vorgewählt ist `guenstigste`. | vom Team bestätigt (12.11.2026) |
 
 ## 2. Fachliche Entitätstypen und Hilfsklassen (Kapitel 2.1, 4.3.2)
 
@@ -32,6 +33,8 @@ hat einen Status:
 | 2.2 | `WantSummary` ergänzt `Want` um Zähler | Zusätzlich das Feld `region : Place` | «Meine Gesuche» zeigt je Gesuch die Region (Kapitel 3.3). Ohne das Feld bräuchte jede Karte einen eigenen Datenzugriff. | umgesetzt |
 | 2.3 | `Photo` ist eine eigene Entität mit `offerID` | `Offer` trägt zusätzlich die Liste `photos` | Bequemer für die Anzeige der Angebotsliste. In der Datenbank bleibt `photo` eine eigene Tabelle. | umgesetzt |
 | 2.4 | Paket `model` enthält die Klassen der Entitätstypen | Zusätzlich Grenzwerte (`account_limits.dart`, `WantLimits` in `want.dart`) und die Zustandsliste | Maske (Anwendungsschicht) und Repository (Datenzugriffsschicht) brauchen dieselben Werte. Im Paket `model` dürfen beide Schichten sie verwenden, ohne die Schichtrichtung zu verletzen. | umgesetzt |
+| 2.5 | `Offer` hat die Attribute aus Kapitel 2.1 | Zusätzlich `sellerName` (Anzeigename des Verkäufers, freiwillig) | Die Angebotsliste (UC7) zeigt, von wem ein Angebot ist. Ohne das Feld bräuchte jede Karte einen eigenen Datenzugriff (wie 2.2). | umgesetzt |
+| 2.6 | Grenzwerte für Angebote nicht festgelegt | `OfferLimits` in `model/offer.dart` (siehe 3.10 bis 3.12) | Wie 2.4: Maske und Repository prüfen dieselben Werte | umgesetzt |
 
 ## 3. Eingaberegeln und Grenzwerte (Inputvalidierung, Modul 183)
 
@@ -51,6 +54,9 @@ dieselben Werte als CHECK-Regeln bzw. in den Auth-Einstellungen stehen.
 | 3.7 | Kategorie | nur die sechs Kategorien aus Kapitel 2.1 (Whitelist) | `kategorien` in `model/want.dart` | umgesetzt |
 | 3.8 | Umkreis | Auswahl 10/20/30/50/100 km plus Wert aus dem Profil, erlaubt 1–200 km | `WantLimits.radiusOptions`, `maxRadiusKm` | vom Team bestätigt (12.11.2026) |
 | 3.9 | Laufzeit | Auswahl **7, 14 oder 30 Tage**, vorbelegt 14 (UC3) | `WantLimits.durationOptions` | vom Team bestätigt (12.11.2026) |
+| 3.10 | Preis des Angebots | Pflicht, grösser als **CHF 0**, höchstens **CHF 10'000** (wie die höchste Preisobergrenze). Eingabe als «1650», «1'650» oder «1650.50». | `OfferLimits.maxPriceRappen`, `parseChfToRappen` in `application/logic/offer_rules.dart` | Vorschlag, vom Team zu bestätigen |
+| 3.11 | Nachricht zum Angebot | **freiwillig**, höchstens **500** Zeichen | `OfferLimits.maxMessageLength` | Vorschlag, vom Team zu bestätigen |
+| 3.12 | Fotos zum Angebot | höchstens **3** (F-09), verkleinert auf höchstens 1600 px, JPEG 80 % | `OfferLimits.maxPhotos`, `pickPhotoWithImagePicker` | umgesetzt |
 
 ## 4. Zustände je Kategorie (Kapitel 2.1)
 
@@ -91,7 +97,7 @@ vorausgewählt.
 | 6.2 | UC1 Kurzbeschreibung: «Die Sitzung bleibt bestehen, bis sie sich abmeldet» | Mit Supabase umgesetzt: `supabase_flutter` speichert die Sitzung, beim Start lädt `getMyProfile` das Profil. Nur mit dem Mock ist die Sitzung nach einem Neustart weg. |
 | 6.3 | UC4 in «Meine Gesuche»: Pausieren, Bearbeiten, eigene Karte für abgelaufene Gesuche, verbleibende Laufzeit | Die Liste zeigt bereits Kategorie, Status, Titel, Preisobergrenze, Region und Angebote. Der Rest folgt mit UC4. |
 | 6.4 | Alle übrigen Masken aus Abbildung 4 | Platzhalter mit den Wegen aus Abbildung 4 |
-| 6.5 | `SupabaseRefindRepository` für UC2 und UC4 bis UC9 | Folgt mit den Use Cases. Diese Methoden werfen im Moment `UnimplementedError` («folgt mit UCx»). Die App ruft sie noch nirgends auf. |
+| 6.5 | `SupabaseRefindRepository` für UC2, UC4, UC5, UC8 und UC9 | Folgt mit den Use Cases. Diese Methoden werfen im Moment `UnimplementedError` («folgt mit UCx»). Die App ruft sie noch nirgends auf. UC6 und UC7 sind umgesetzt (Abschnitt 9), für UC5 gibt es eine vorläufige Liste (9.1). |
 
 ## 7. Projekt-Einstellungen (nicht im Konzept festgelegt)
 
@@ -102,9 +108,10 @@ vorausgewählt.
 | 7.3 | Zustandsverwaltung | Paket `provider`, wie in der Studie vorgesehen (Kapitel 4.2.2) |
 | 7.4 | Umsetzung des Repository beim Start | `lib/app_config.dart`, Konstante `repositoryMode` (`mock` oder `supabase`), im Moment `supabase`. Nach dem Umschalten Hot Restart (`R`). Die Tests benutzen immer das Mock. |
 | 7.5 | Verbindung zu Supabase | URL und publishableKey nur in `lib/app_config.dart` (`SupabaseConfig`). Der publishableKey ist öffentlich, was er darf, bestimmen die RLS-Regeln. Der service_role-Schlüssel ist nicht in der App. |
-| 7.6 | Zusätzliche Pakete | `supabase_flutter` (Backend), `http` (um «keine Verbindung» sicher zu erkennen) |
+| 7.6 | Zusätzliche Pakete | `supabase_flutter` (Backend), `http` (um «keine Verbindung» sicher zu erkennen), `image_picker` (Fotos zum Angebot aus Kamera oder Galerie, F-09) |
 | 7.7 | Android-Berechtigung | `INTERNET` im `AndroidManifest.xml`, nötig für die fertige App (Release) |
-| 7.8 | Datenbankschema | SQL-Export in `supabase/01` bis `04`, Testdaten und vorläufige Ortschaften in `supabase/05_testdaten.sql`, CHECK-Regeln in `supabase/07_check_regeln.sql`, Funktion «Angebot annehmen» in `supabase/08_angebot_annehmen.sql` |
+| 7.8 | Datenbankschema | SQL-Export in `supabase/01` bis `04`, Testdaten und vorläufige Ortschaften in `supabase/05_testdaten.sql`, CHECK-Regeln in `supabase/07_check_regeln.sql`, Funktion «Angebot annehmen» in `supabase/08_angebot_annehmen.sql`, Funktion «Angebote gesehen» und Regeln für Angebote in `supabase/09_angebote.sql` (noch nicht ausgeführt, siehe 9.4) |
+| 7.9 | Bucket für Fotos der Angebote | `SupabaseConfig.offerPhotoBucket` in `lib/app_config.dart`, im Moment leer (siehe 9.3) |
 
 ## 8. Supabase (SupabaseRefindRepository, KW 46)
 
@@ -130,4 +137,26 @@ in der Tabelle `want`.
 | 8.11 | UC1 Schritt 5: Link in der Mail bestätigt das Konto | Der Link führt nach der Bestätigung auf `localhost:3000` («Seite nicht erreichbar»). Die Bestätigung selbst klappt. Grund: Die «Site URL» im Projekt steht noch auf dem Standardwert. | Site URL und Redirect URLs einstellen (Authentication → URL Configuration), z.B. eine einfache Seite «Konto bestätigt, zurück zur App» oder einen Link direkt in die App | offen |
 | 8.12 | Ortschaftenverzeichnis von swisstopo (Konzept 2.1) | Die Tabelle `place` war leer, darum liess sich keine Region wählen. Übergang: 8 Orte (Bern, Zürich, Winterthur, Basel, Luzern, St. Gallen, Lausanne, Genève) in `supabase/05_testdaten.sql`. Das Mock hat andere Beispielorte (u.a. Thun, Biel, Burgdorf). | Ganzes Ortschaftenverzeichnis mit LV95-Koordinaten importieren | Übergang mit 05_testdaten.sql |
 | 8.13 | Pushtoken beim Abmelden entfernen (Kapitel 4.3.2) | `signOut` löscht die Zeilen in `push_token` und meldet dann ab. Darum braucht das Abmelden mit Supabase eine Verbindung. | Nach dem Abmelden keine Mitteilungen mehr | umgesetzt |
-| 8.14 | F-12 / UC7: Angebot annehmen, übrige Angebote absagen, Chat anlegen | Datenbank-Funktion `accept_offer(p_offer_id)` in `supabase/08_angebot_annehmen.sql`, Aufruf aus der App über `rpc`. Sie prüft Besitzer, Status und Ablauf des Gesuchs, nimmt das Angebot an, sagt die übrigen offenen Angebote ab und legt den Chat an, alles in einer Transaktion. Eigene Fehler mit den Codes P0001 und P0002. | Der Käufer darf den Status eines Angebots wegen RLS nicht direkt ändern. Nächster Schritt: `acceptOffer` im SupabaseRefindRepository umsetzen, P0001/P0002 in `mapSupabaseError` ergänzen | umgesetzt (19.11.2026) |
+| 8.14 | F-12 / UC7: Angebot annehmen, übrige Angebote absagen, Chat anlegen | Datenbank-Funktion `accept_offer(p_offer_id)` in `supabase/08_angebot_annehmen.sql`, Aufruf aus der App über `rpc`. Sie prüft Besitzer, Status und Ablauf des Gesuchs, nimmt das Angebot an, sagt die übrigen offenen Angebote ab und legt den Chat an, alles in einer Transaktion. Eigene Fehler mit den Codes P0001 und P0002. `acceptOffer` im SupabaseRefindRepository ruft sie auf, `mapSupabaseError` übersetzt P0001 in «konflikt» und P0002 in «ungültige Eingabe» (siehe 9.6). | Der Käufer darf den Status eines Angebots wegen RLS nicht direkt ändern. | umgesetzt (19.11.2026) |
+
+## 9. Angebote (UC6, UC7, KW 47)
+
+Umgesetzt von Nick am 19.11.2026: Maske «Angebot senden» (UC6, F-09),
+Maske «Gesuch Detail · Angebote» mit Kennzeichnung «über Budget»,
+Sortierung und «Annehmen» (UC7, F-10 bis F-12). Im Mock und im
+SupabaseRefindRepository (`getFeed` vorläufig, `createOffer`, `getOffers`,
+`markOffersSeen`, `acceptOffer`). Unittests: `test/offer_rules_test.dart`,
+`test/mock_refind_repository_test.dart`, `test/supabase_mapping_test.dart`,
+`test/offer_screens_test.dart`.
+
+| Nr. | Konzept / Erwartung | Umsetzung oder Befund | Grund / nächster Schritt | Status |
+|---|---|---|---|---|
+| 9.1 | UC6 beginnt in «Entdecken» (UC5) mit Karten, Suche und Filter | «Entdecken» zeigt **vorläufig** eine einfache Liste der aktiven Gesuche anderer Personen, jede Karte mit «Angebot senden». `getFeed` im SupabaseRefindRepository ist ebenfalls vorläufig: Kategorie in der Datenbank, Suchtext und Umkreis in der App, höchstens 50 Gesuche. | Ohne Liste lässt sich UC6 auf dem Handy nicht testen. Wird mit UC5 ersetzt. | Übergang |
+| 9.2 | Feed zeigt keine Gesuche mit angenommenem Angebot | Die vorläufige Liste mit Supabase zeigt sie noch (z.B. «Omega Speedmaster»), weil die App fremde Angebote nicht lesen darf. Ein Angebot darauf lehnt die RLS-Regel `offer_insert` ab, die App meldet «Auf dieses Gesuch kannst du kein Angebot (mehr) senden.» | Mit UC5: Sicht oder Funktion für den Feed, die solche Gesuche ausblendet | offen |
+| 9.3 | F-09: Fotos in der Dateiablage (Konzept 2.1) | Der Ablauf ist vorbereitet: Angebot speichern, Fotos nach Supabase Storage unter `<offerId>/<n>.jpg`, Pfad in `photo.url`. Beim Anzeigen erzeugt die App Links, die eine Stunde gültig sind (`createSignedUrls`, passt zu einem privaten Bucket). Solange `SupabaseConfig.offerPhotoBucket` leer ist, wird das Angebot **ohne Fotos** gespeichert, die App meldet das nach dem Senden. | Etienne richtet die Dateiablage bis 26.11.2026 ein (Bucket und Storage-Regeln). Danach Namen in `app_config.dart` eintragen und mit ben@refind.test testen. | offen (bis 26.11.2026) |
+| 9.4 | UC7: Angebote werden beim Ansehen «gesehen» (Abbildung 2) | Der Käufer darf den Status wegen RLS nicht ändern. Neue Funktion `mark_offers_seen(p_want_id)` in `supabase/09_angebote.sql`. Klappt der Aufruf nicht (z.B. Funktion noch nicht in der Datenbank), zeigt die App keinen Fehler, die Angebote bleiben «neu». | `09_angebote.sql` im SQL Editor ausführen | offen |
+| 9.5 | Prüfung auf dem Server für Angebote (Factsheet Inputvalidierung) | In der Datenbank gilt nur `price > 0` (07). `09_angebote.sql` ergänzt: Preis höchstens CHF 10'000, Nachricht höchstens 500 Zeichen, höchstens 3 Fotos pro Angebot (RLS `photo_insert`). | Werte 3.10 und 3.11 vom Team bestätigen, dann `09_angebote.sql` ausführen | offen |
+| 9.6 | Fehler beim Annehmen | P0001 (Gesuch nicht mehr aktiv, schon ein Angebot angenommen, Angebot abgesagt) → «Dieses Angebot lässt sich nicht mehr annehmen. Bitte lade die Angebote neu.», die Liste lädt sich neu. P0002 → «Das Angebot wurde nicht gefunden.» 42501 → «Dafür fehlt dir die Berechtigung.» Das Mock wirft dieselben Meldungen. Fehler von Storage (Foto zu gross usw.) sind ebenfalls übersetzt. | Gleiche Meldungen in Mock und Supabase | umgesetzt |
+| 9.7 | Scheitern die Fotos nach dem Speichern des Angebots | Das Angebot bleibt gespeichert (ohne die Fotos), die App meldet «Angebot gesendet. Die Fotos konnten noch nicht gespeichert werden.» Nicht als Fehler, sonst sendet die Person nochmals und es gibt zwei Angebote. | Angebot und Fotos lassen sich nicht in einer Transaktion speichern (Storage ist keine Tabelle). Später: Fotos nachträglich hinzufügen | umgesetzt |
+| 9.8 | F-12: «Danach öffnet sich der Chat» | Nach «Annehmen» (mit Rückfrage) ersetzt der Chat die Maske «Gesuch Detail». `ChatScreen` bekommt den neuen Chat (`thread`), der Platzhalter zeigt ihn noch nicht an. | Chat selbst folgt mit UC8 | Übergang |
+| 9.9 | Mock-Testdaten | Neues Angebot `offer-4` von Mia (CHF 2'650) zu Annas «Omega Seamaster 300» (Budget CHF 2'500), damit «über Budget» auch im Mock zu sehen ist | F-11 testbar machen | umgesetzt |

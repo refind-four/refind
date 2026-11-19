@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:refind/data/mock_refind_repository.dart';
 import 'package:refind/data/repository_exception.dart';
@@ -70,6 +72,115 @@ void main() {
     final statusById = {for (final o in offers) o.id: o.status};
     expect(statusById['offer-1'], OfferStatus.angenommen);
     expect(statusById['offer-2'], OfferStatus.abgesagt);
+  });
+
+  group('UC6: Angebot senden', () {
+    setUp(() => repo.signIn('luca@refind.test', 'refind123'));
+
+    test('gültiges Angebot ist neu und erscheint beim Besitzer', () async {
+      final offer = await repo.createOffer(
+          'want-5', 210000, '  M6 mit Summicron  ', [File('a.jpg'), File('b.jpg')]);
+      expect(offer.status, OfferStatus.neu);
+      expect(offer.message, 'M6 mit Summicron');
+      expect(offer.photos, hasLength(2));
+      expect(offer.sellerName, 'Luca Brunner');
+
+      await repo.signOut();
+      await repo.signIn('mia@refind.test', 'refind123');
+      final offers = await repo.getOffers('want-5', OfferSort.neueste);
+      expect(offers.single.id, offer.id);
+    });
+
+    for (final (name, price, message, photos) in [
+      ('Preis 0', 0, '', 0),
+      ('Preis negativ', -100, '', 0),
+      ('Preis über Maximum', OfferLimits.maxPriceRappen + 1, '', 0),
+      ('Nachricht zu lang', 1000, 'a' * (OfferLimits.maxMessageLength + 1), 0),
+      ('vier Fotos', 1000, '', 4),
+    ]) {
+      test('$name wird abgelehnt', () async {
+        await expectLater(
+          repo.createOffer(
+              'want-5', price, message, [for (var i = 0; i < photos; i++) File('$i.jpg')]),
+          throwsA(isA<RepositoryException>().having(
+              (e) => e.kind, 'kind', RepositoryErrorKind.ungueltigeEingabe)),
+        );
+      });
+    }
+
+    test('auf eigenes Gesuch: nichtBerechtigt', () async {
+      await expectLater(
+        repo.createOffer('want-3', 70000, '', const []),
+        throwsA(isA<RepositoryException>()
+            .having((e) => e.kind, 'kind', RepositoryErrorKind.nichtBerechtigt)),
+      );
+    });
+
+    test('auf pausiertes Gesuch: konflikt', () async {
+      await expectLater(
+        repo.createOffer('want-2', 400000, '', const []),
+        throwsA(isA<RepositoryException>()
+            .having((e) => e.kind, 'kind', RepositoryErrorKind.konflikt)),
+      );
+    });
+  });
+
+  group('UC7: Angebote ansehen und annehmen', () {
+    setUp(() => repo.signIn('anna@refind.test', 'refind123'));
+
+    test('F-10: nach Preis sortiert, mit Namen der Verkäufer', () async {
+      final offers = await repo.getOffers('want-1', OfferSort.guenstigste);
+      expect(offers.map((o) => o.priceRappen), [230000, 245000, 265000]);
+      expect(offers.first.sellerName, 'Luca Brunner');
+    });
+
+    test('nach Datum: neuestes zuerst', () async {
+      final offers = await repo.getOffers('want-1', OfferSort.neueste);
+      expect(offers.map((o) => o.id), ['offer-4', 'offer-1', 'offer-2']);
+    });
+
+    test('fremdes Gesuch: nichtBerechtigt', () async {
+      await expectLater(
+        repo.getOffers('want-3', OfferSort.neueste),
+        throwsA(isA<RepositoryException>()
+            .having((e) => e.kind, 'kind', RepositoryErrorKind.nichtBerechtigt)),
+      );
+    });
+
+    test('markOffersSeen: neu wird gesehen', () async {
+      await repo.markOffersSeen('want-1');
+      final offers = await repo.getOffers('want-1', OfferSort.neueste);
+      expect(offers.every((o) => o.status == OfferStatus.gesehen), isTrue);
+    });
+
+    test('F-12: Chat zwischen Käuferin und Verkäufer', () async {
+      final thread = await repo.acceptOffer('offer-4');
+      expect(thread.buyerId, 'user-anna');
+      expect(thread.sellerId, 'user-mia');
+      expect(thread.offerId, 'offer-4');
+      final chats = await repo.getChats();
+      expect(chats.map((c) => c.thread.id), contains(thread.id));
+    });
+
+    test('zweites Annehmen: konflikt mit verständlicher Meldung', () async {
+      await repo.acceptOffer('offer-1');
+      await expectLater(
+        repo.acceptOffer('offer-2'),
+        throwsA(isA<RepositoryException>()
+            .having((e) => e.kind, 'kind', RepositoryErrorKind.konflikt)
+            .having((e) => e.message, 'message', acceptConflictMessage)),
+      );
+    });
+
+    test('Angebot anderer Leute annehmen: nichtBerechtigt', () async {
+      await repo.signOut();
+      await repo.signIn('luca@refind.test', 'refind123');
+      await expectLater(
+        repo.acceptOffer('offer-2'),
+        throwsA(isA<RepositoryException>()
+            .having((e) => e.kind, 'kind', RepositoryErrorKind.nichtBerechtigt)),
+      );
+    });
   });
 
   group('UC3: Gesuch erfassen', () {

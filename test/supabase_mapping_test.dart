@@ -72,6 +72,72 @@ void main() {
     });
   });
 
+  group('Angebote: Datenbankzeile → Modell', () {
+    test('offer mit Fotos und Name des Verkäufers', () {
+      final o = offerFromRow({
+        'id': 'o1',
+        'want_id': 'w1',
+        'seller_id': 's1',
+        'price': 210000,
+        'message': null,
+        'created_at': '2026-11-19T08:00:00+00:00',
+        'status': 'gesehen',
+        'photo': [
+          {'id': 'p1', 'offer_id': 'o1', 'url': 'o1/1.jpg'},
+        ],
+        'seller': {'display_name': 'Ben'},
+      });
+      expect(o.priceRappen, 210000);
+      expect(o.message, '');
+      expect(o.status, OfferStatus.gesehen);
+      expect(o.photos.single.url, 'o1/1.jpg');
+      expect(o.sellerName, 'Ben');
+    });
+
+    test('offer ohne mitgeladene Fotos und Namen', () {
+      final o = offerFromRow({
+        'id': 'o1',
+        'want_id': 'w1',
+        'seller_id': 's1',
+        'price': 100,
+        'message': 'Hallo',
+        'created_at': '2026-11-19T08:00:00+00:00',
+        'status': 'neu',
+      });
+      expect(o.photos, isEmpty);
+      expect(o.sellerName, isNull);
+    });
+
+    test('chat_thread nach accept_offer', () {
+      final t = chatThreadFromRow({
+        'id': 't1',
+        'offer_id': 'o1',
+        'want_id': 'w1',
+        'buyer_id': 'anna',
+        'seller_id': 'ben',
+        'last_activity': '2026-11-19T08:00:00+00:00',
+        'handover_at': null,
+        'handover_place': null,
+        'agreed_price': null,
+        'closed_at': null,
+      });
+      expect(t.buyerId, 'anna');
+      expect(t.isClosed, isFalse);
+      expect(t.handoverAt, isNull);
+    });
+
+    test('feed: Gesuch mit Region und Name des Käufers', () {
+      final item = feedItemFromRow({
+        ...wantRow(),
+        'region': {'id': 3, 'plz': 3000, 'name': 'Bern', 'e': 2600670, 'n': 1199655},
+        'owner': {'display_name': 'Anna'},
+      });
+      expect(item.buyerName, 'Anna');
+      expect(item.region.name, 'Bern');
+      expect(item.distanceKm, isNull);
+    });
+  });
+
   group('Fehler von Supabase → RepositoryException', () {
     RepositoryException map(Object e) => mapSupabaseError(e) as RepositoryException;
 
@@ -120,6 +186,30 @@ void main() {
           RepositoryErrorKind.ungueltigeEingabe);
       expect(map(const PostgrestException(message: 'fk', code: '23503')).kind,
           RepositoryErrorKind.ungueltigeEingabe);
+    });
+
+    test('accept_offer: P0001 (nicht mehr möglich) → konflikt', () {
+      final e = map(const PostgrestException(
+          message: 'Es wurde bereits ein Angebot angenommen', code: 'P0001'));
+      expect(e.kind, RepositoryErrorKind.konflikt);
+      expect(e.message, acceptConflictMessage);
+    });
+
+    test('accept_offer: P0002 (nicht gefunden) → ungueltigeEingabe', () {
+      final e = map(
+          const PostgrestException(message: 'Angebot nicht gefunden', code: 'P0002'));
+      expect(e.kind, RepositoryErrorKind.ungueltigeEingabe);
+    });
+
+    test('accept_offer: fremdes Gesuch (42501) → nichtBerechtigt', () {
+      final e =
+          map(const PostgrestException(message: 'Nicht berechtigt', code: '42501'));
+      expect(e.kind, RepositoryErrorKind.nichtBerechtigt);
+    });
+
+    test('Foto zu gross → ungueltigeEingabe', () {
+      final e = map(StorageException('Payload too large', statusCode: '413'));
+      expect(e.kind, RepositoryErrorKind.ungueltigeEingabe);
     });
 
     test('Programmierfehler werden nicht versteckt', () {

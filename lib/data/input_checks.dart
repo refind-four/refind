@@ -48,3 +48,16 @@ void checkWantDraft(WantDraft d) {
     _invalid('Unbekannte Laufzeit.');
   }
 }
+
+/// Prüft ein Angebot vor dem Speichern (UC6, F-09).
+void checkOffer(int priceRappen, String message, int photoCount) {
+  if (priceRappen <= 0 || priceRappen > OfferLimits.maxPriceRappen) {
+    _invalid('Der Preis liegt ausserhalb des erlaubten Bereichs.');
+  }
+  if (message.trim().length > OfferLimits.maxMessageLength) {
+    _invalid('Die Nachricht ist zu lang.');
+  }
+  if (photoCount > OfferLimits.maxPhotos) {
+    _invalid('Höchstens ${OfferLimits.maxPhotos} Fotos pro Angebot.');
+  }
+}

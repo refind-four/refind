@@ -395,13 +395,15 @@ class MockRefindRepository implements RefindRepository {
     List<File> photos,
   ) async {
     await _wait();
+    // Gemeinsame Prüfung mit SupabaseRefindRepository (input_checks.dart).
+    checkOffer(priceRappen, message, photos.length);
     final want = _want(wantId);
     if (want.ownerId == _me) _forbidden('Auf eigene Gesuche kannst du nicht anbieten.');
-    if (want.status != WantStatus.aktiv || _hasAcceptedOffer(wantId)) {
+    if (want.status != WantStatus.aktiv ||
+        want.expiresAt.isBefore(DateTime.now()) ||
+        _hasAcceptedOffer(wantId)) {
       _conflict('Dieses Gesuch nimmt keine Angebote mehr an.');
     }
-    if (priceRappen <= 0) _invalid('Der Preis muss grösser als 0 sein.');
-    if (photos.length > 3) _invalid('Höchstens drei Fotos pro Angebot.');
     final offerId = _newId('offer');
     final offer = Offer(
       id: offerId,
@@ -411,6 +413,7 @@ class MockRefindRepository implements RefindRepository {
       message: message.trim(),
       createdAt: DateTime.now(),
       status: OfferStatus.neu,
+      sellerName: _users[_me]?.displayName,
       photos: [
         for (final f in photos)
           Photo(id: _newId('photo'), offerId: offerId, url: f.path),
@@ -424,12 +427,29 @@ class MockRefindRepository implements RefindRepository {
   Future<List<Offer>> getOffers(String wantId, OfferSort sort) async {
     await _wait();
     _myWant(wantId);
-    final list = _offers.where((o) => o.wantId == wantId).toList();
+    final list = [
+      for (final o in _offers.where((o) => o.wantId == wantId))
+        Offer(
+          id: o.id,
+          wantId: o.wantId,
+          sellerId: o.sellerId,
+          priceRappen: o.priceRappen,
+          message: o.message,
+          createdAt: o.createdAt,
+          status: o.status,
+          photos: o.photos,
+          sellerName: _users[o.sellerId]?.displayName,
+        ),
+    ];
     switch (sort) {
       case OfferSort.neueste:
         list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       case OfferSort.guenstigste:
-        list.sort((a, b) => a.priceRappen.compareTo(b.priceRappen));
+        // Bei gleichem Preis das neuere zuerst, wie bei Supabase.
+        list.sort((a, b) {
+          final byPrice = a.priceRappen.compareTo(b.priceRappen);
+          return byPrice != 0 ? byPrice : b.createdAt.compareTo(a.createdAt);
+        });
     }
     return list;
   }
@@ -454,8 +474,12 @@ class MockRefindRepository implements RefindRepository {
       orElse: () => _invalid('Angebot nicht gefunden.'),
     );
     final want = _myWant(offer.wantId);
-    if (want.status != WantStatus.aktiv || _hasAcceptedOffer(want.id)) {
-      _conflict('Für dieses Gesuch wurde schon ein Angebot angenommen.');
+    // Gleiche Bedingungen wie accept_offer (supabase/08_angebot_annehmen.sql)
+    if (want.status != WantStatus.aktiv ||
+        want.expiresAt.isBefore(DateTime.now()) ||
+        _hasAcceptedOffer(want.id) ||
+        (offer.status != OfferStatus.neu && offer.status != OfferStatus.gesehen)) {
+      _conflict(acceptConflictMessage);
     }
     // Wie die Funktion accept_offer: annehmen, übrige absagen, Chat anlegen.
     for (var i = 0; i < _offers.length; i++) {
@@ -706,6 +730,11 @@ class MockRefindRepository implements RefindRepository {
           priceRappen: 245000, message: 'Originalzustand mit Box und Papieren.',
           createdAt: now.subtract(const Duration(hours: 30)),
           status: OfferStatus.gesehen),
+      // Liegt über der Preisobergrenze von CHF 2'500 (F-11).
+      Offer(id: 'offer-4', wantId: 'want-1', sellerId: 'user-mia',
+          priceRappen: 265000, message: 'Seamaster 300 von 1964, mit Revision.',
+          createdAt: now.subtract(const Duration(hours: 5)),
+          status: OfferStatus.neu),
       Offer(id: 'offer-3', wantId: 'want-4', sellerId: 'user-anna',
           priceRappen: 14000, message: 'Erstpressung, Vinyl in sehr gutem Zustand.',
           createdAt: now.subtract(const Duration(days: 3)),
