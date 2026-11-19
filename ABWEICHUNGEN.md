@@ -3,7 +3,8 @@
 Bezug: *2_1_Konzeptbericht_refind*, Speicherdatum 29.10.2026.
 Stand: 19.11.2026 (KW 47), nach Anmelden/Registrieren (UC1), Gesuch erfassen (UC3),
 SupabaseRefindRepository für UC1 und UC3 (Abschnitt 8) sowie Angebot senden,
-ansehen und annehmen (UC6, UC7, Abschnitt 9).
+ansehen und annehmen (UC6, UC7, Abschnitt 9) sowie dem Datenteil von
+Entdecken (UC5, Abschnitt 10).
 Alle Team-Entscheide wurden am 12.11.2026 vom Team bestätigt, Vinyl mit
 geänderten Zuständen (Abschnitt 4).
 
@@ -97,7 +98,7 @@ vorausgewählt.
 | 6.2 | UC1 Kurzbeschreibung: «Die Sitzung bleibt bestehen, bis sie sich abmeldet» | Mit Supabase umgesetzt: `supabase_flutter` speichert die Sitzung, beim Start lädt `getMyProfile` das Profil. Nur mit dem Mock ist die Sitzung nach einem Neustart weg. |
 | 6.3 | UC4 in «Meine Gesuche»: Pausieren, Bearbeiten, eigene Karte für abgelaufene Gesuche, verbleibende Laufzeit | Die Liste zeigt bereits Kategorie, Status, Titel, Preisobergrenze, Region und Angebote. Der Rest folgt mit UC4. |
 | 6.4 | Alle übrigen Masken aus Abbildung 4 | Platzhalter mit den Wegen aus Abbildung 4 |
-| 6.5 | `SupabaseRefindRepository` für UC2, UC4, UC5, UC8 und UC9 | Folgt mit den Use Cases. Diese Methoden werfen im Moment `UnimplementedError` («folgt mit UCx»). Die App ruft sie noch nirgends auf. UC6 und UC7 sind umgesetzt (Abschnitt 9), für UC5 gibt es eine vorläufige Liste (9.1). |
+| 6.5 | `SupabaseRefindRepository` für UC2, UC4, UC8 und UC9 | Folgt mit den Use Cases. Diese Methoden werfen im Moment `UnimplementedError` («folgt mit UCx»). Die App ruft sie noch nirgends auf. UC5 (`getFeed`, Abschnitt 10), UC6 und UC7 (Abschnitt 9) sind umgesetzt. |
 
 ## 7. Projekt-Einstellungen (nicht im Konzept festgelegt)
 
@@ -110,7 +111,7 @@ vorausgewählt.
 | 7.5 | Verbindung zu Supabase | URL und publishableKey nur in `lib/app_config.dart` (`SupabaseConfig`). Der publishableKey ist öffentlich, was er darf, bestimmen die RLS-Regeln. Der service_role-Schlüssel ist nicht in der App. |
 | 7.6 | Zusätzliche Pakete | `supabase_flutter` (Backend), `http` (um «keine Verbindung» sicher zu erkennen), `image_picker` (Fotos zum Angebot aus Kamera oder Galerie, F-09) |
 | 7.7 | Android-Berechtigung | `INTERNET` im `AndroidManifest.xml`, nötig für die fertige App (Release) |
-| 7.8 | Datenbankschema | SQL-Export in `supabase/01` bis `04`, Testdaten und vorläufige Ortschaften in `supabase/05_testdaten.sql`, CHECK-Regeln in `supabase/07_check_regeln.sql`, Funktion «Angebot annehmen» in `supabase/08_angebot_annehmen.sql`, Funktion «Angebote gesehen» und Regeln für Angebote in `supabase/09_angebote.sql` (noch nicht ausgeführt, siehe 9.4) |
+| 7.8 | Datenbankschema | SQL-Export in `supabase/01` bis `04`, Testdaten und vorläufige Ortschaften in `supabase/05_testdaten.sql`, CHECK-Regeln in `supabase/07_check_regeln.sql`, Funktion «Angebot annehmen» in `supabase/08_angebot_annehmen.sql`, Funktion «Angebote gesehen» und Regeln für Angebote in `supabase/09_angebote.sql` (noch nicht ausgeführt, siehe 9.4), Funktion «Feed» in `supabase/10_feed.sql` (siehe 10.2). `10_feed.sql` hiess zuerst `09_feed.sql` und wurde am 19.11.2026 umbenannt, weil das Team gleichzeitig `09_angebote.sql` angelegt hatte. |
 | 7.9 | Bucket für Fotos der Angebote | `SupabaseConfig.offerPhotoBucket` in `lib/app_config.dart`, im Moment leer (siehe 9.3) |
 
 ## 8. Supabase (SupabaseRefindRepository, KW 46)
@@ -144,15 +145,15 @@ in der Tabelle `want`.
 Umgesetzt von Nick am 19.11.2026: Maske «Angebot senden» (UC6, F-09),
 Maske «Gesuch Detail · Angebote» mit Kennzeichnung «über Budget»,
 Sortierung und «Annehmen» (UC7, F-10 bis F-12). Im Mock und im
-SupabaseRefindRepository (`getFeed` vorläufig, `createOffer`, `getOffers`,
+SupabaseRefindRepository (`getFeed` zuerst vorläufig, seit 19.11.2026 durch UC5 ersetzt, siehe Abschnitt 10; `createOffer`, `getOffers`,
 `markOffersSeen`, `acceptOffer`). Unittests: `test/offer_rules_test.dart`,
 `test/mock_refind_repository_test.dart`, `test/supabase_mapping_test.dart`,
 `test/offer_screens_test.dart`.
 
 | Nr. | Konzept / Erwartung | Umsetzung oder Befund | Grund / nächster Schritt | Status |
 |---|---|---|---|---|
-| 9.1 | UC6 beginnt in «Entdecken» (UC5) mit Karten, Suche und Filter | «Entdecken» zeigt **vorläufig** eine einfache Liste der aktiven Gesuche anderer Personen, jede Karte mit «Angebot senden». `getFeed` im SupabaseRefindRepository ist ebenfalls vorläufig: Kategorie in der Datenbank, Suchtext und Umkreis in der App, höchstens 50 Gesuche. | Ohne Liste lässt sich UC6 auf dem Handy nicht testen. Wird mit UC5 ersetzt. | Übergang |
-| 9.2 | Feed zeigt keine Gesuche mit angenommenem Angebot | Die vorläufige Liste mit Supabase zeigt sie noch (z.B. «Omega Speedmaster»), weil die App fremde Angebote nicht lesen darf. Ein Angebot darauf lehnt die RLS-Regel `offer_insert` ab, die App meldet «Auf dieses Gesuch kannst du kein Angebot (mehr) senden.» | Mit UC5: Sicht oder Funktion für den Feed, die solche Gesuche ausblendet | offen |
+| 9.1 | UC6 beginnt in «Entdecken» (UC5) mit Karten, Suche und Filter | «Entdecken» zeigt **vorläufig** eine einfache Liste der aktiven Gesuche anderer Personen, jede Karte mit «Angebot senden». Das vorläufige `getFeed` im SupabaseRefindRepository (höchstens 50 Gesuche, Suche auch in der Beschreibung) ist seit dem Merge vom 19.11.2026 durch das `getFeed` aus UC5 ersetzt (Abschnitt 10). | Ohne Liste lässt sich UC6 auf dem Handy nicht testen. Die Maske wird mit UC5 ersetzt. | Übergang (Maske), `getFeed` ersetzt |
+| 9.2 | Feed zeigt keine Gesuche mit angenommenem Angebot | Gelöst mit der Funktion `get_feed` in `supabase/10_feed.sql` (siehe 10.2). Bis die Datei im SQL Editor ausgeführt ist, meldet der Feed mit Supabase einen Fehler. Zusätzlich lehnt die RLS-Regel `offer_insert` ein Angebot auf ein solches Gesuch ab («Auf dieses Gesuch kannst du kein Angebot (mehr) senden.»). | `10_feed.sql` ausführen | umgesetzt (19.11.2026), Datei noch ausführen |
 | 9.3 | F-09: Fotos in der Dateiablage (Konzept 2.1) | Der Ablauf ist vorbereitet: Angebot speichern, Fotos nach Supabase Storage unter `<offerId>/<n>.jpg`, Pfad in `photo.url`. Beim Anzeigen erzeugt die App Links, die eine Stunde gültig sind (`createSignedUrls`, passt zu einem privaten Bucket). Solange `SupabaseConfig.offerPhotoBucket` leer ist, wird das Angebot **ohne Fotos** gespeichert, die App meldet das nach dem Senden. | Etienne richtet die Dateiablage bis 26.11.2026 ein (Bucket und Storage-Regeln). Danach Namen in `app_config.dart` eintragen und mit ben@refind.test testen. | offen (bis 26.11.2026) |
 | 9.4 | UC7: Angebote werden beim Ansehen «gesehen» (Abbildung 2) | Der Käufer darf den Status wegen RLS nicht ändern. Neue Funktion `mark_offers_seen(p_want_id)` in `supabase/09_angebote.sql`. Klappt der Aufruf nicht (z.B. Funktion noch nicht in der Datenbank), zeigt die App keinen Fehler, die Angebote bleiben «neu». | `09_angebote.sql` im SQL Editor ausführen | offen |
 | 9.5 | Prüfung auf dem Server für Angebote (Factsheet Inputvalidierung) | In der Datenbank gilt nur `price > 0` (07). `09_angebote.sql` ergänzt: Preis höchstens CHF 10'000, Nachricht höchstens 500 Zeichen, höchstens 3 Fotos pro Angebot (RLS `photo_insert`). | Werte 3.10 und 3.11 vom Team bestätigen, dann `09_angebote.sql` ausführen | offen |
@@ -160,3 +161,25 @@ SupabaseRefindRepository (`getFeed` vorläufig, `createOffer`, `getOffers`,
 | 9.7 | Scheitern die Fotos nach dem Speichern des Angebots | Das Angebot bleibt gespeichert (ohne die Fotos), die App meldet «Angebot gesendet. Die Fotos konnten noch nicht gespeichert werden.» Nicht als Fehler, sonst sendet die Person nochmals und es gibt zwei Angebote. | Angebot und Fotos lassen sich nicht in einer Transaktion speichern (Storage ist keine Tabelle). Später: Fotos nachträglich hinzufügen | umgesetzt |
 | 9.8 | F-12: «Danach öffnet sich der Chat» | Nach «Annehmen» (mit Rückfrage) ersetzt der Chat die Maske «Gesuch Detail». `ChatScreen` bekommt den neuen Chat (`thread`), der Platzhalter zeigt ihn noch nicht an. | Chat selbst folgt mit UC8 | Übergang |
 | 9.9 | Mock-Testdaten | Neues Angebot `offer-4` von Mia (CHF 2'650) zu Annas «Omega Seamaster 300» (Budget CHF 2'500), damit «über Budget» auch im Mock zu sehen ist | F-11 testbar machen | umgesetzt |
+| 9.10 | Hinweis «über der Preisobergrenze» (F-11) beim Eintippen | Beim Merge am 19.11.2026 gefunden: Nach einem Senden mit leerem Preis blieb «Bitte gib einen Preis ein.» stehen und verdeckte den Hinweis. Das Sheet prüft jetzt nach dem ersten Fehlversuch bei jeder Eingabe neu, wie Anmelden und Registrieren. | Gleiches Verhalten in allen Formularen | umgesetzt (19.11.2026) |
+| 9.11 | Widget-Tests in `test/offer_screens_test.dart` | Drei Tests blieben hängen (auch ohne Merge): In `testWidgets` steht die Uhr still, das `Future.delayed` im Mock wurde nie fertig. Aufrufe ans Mock ausserhalb der Maske laufen jetzt in `tester.runAsync`. | Tests müssen in jeder Version durchlaufen | umgesetzt (19.11.2026) |
+
+## 10. Entdecken (UC5, KW 47)
+
+Stand 19.11.2026: Datenteil fertig (FilterLogic, `getFeed` in Mock und
+Supabase, FeedService, Funktion `get_feed`). Die Masken «Entdecken» und
+«Suchen und filtern» folgen. Unittests: `test/filter_logic_test.dart`,
+`test/feed_service_test.dart`, `test/mock_refind_repository_test.dart`
+(Gruppe UC5), `test/supabase_mapping_test.dart`.
+
+| Nr. | Konzept / Erwartung | Umsetzung oder Befund | Grund / nächster Schritt | Status |
+|---|---|---|---|---|
+| 10.1 | Abbildung 13: FilterLogic im Paket `logic`, «Suchbegriff, Kategorie und Distanz» | Klasse `FilterLogic` in `application/logic/filter_logic.dart` mit statischen Methoden (`matchesQuery`, `matchesCategory`, `isWithinRadius`, `isVisibleInFeed`, `apply`, `hasActiveFilter`). Zusätzlich ein neuer `FeedService` in `application/services`, der die FilterLogic auf die Liste des Repositorys anwendet. | Die Datenzugriffsschicht (Mock, Supabase) darf die Anwendungsschicht nicht kennen. Darum ruft nicht das Repository die FilterLogic auf, sondern der Service. So gelten mit Mock und Supabase dieselben Regeln. | umgesetzt |
+| 10.2 | F-06: Feed nur aktive Gesuche, ohne angenommenes Angebot | Funktion `public.get_feed()` (security invoker, RLS `want_select` gilt zusätzlich) und `private.has_accepted_offer(want_id)` (gibt nur ja/nein zurück) in `supabase/10_feed.sql`. Das Mock verhält sich gleich. | Die App darf fremde Angebote wegen RLS `offer_select` nicht lesen und kann «angenommen» deshalb nicht selbst prüfen (siehe 9.2) | umgesetzt, Datei noch im SQL Editor ausführen |
+| 10.3 | F-07, UC5 Schritt 5: Suchbegriff im **Titel** | Mock und Supabase suchen nur im Titel. Vorher suchten das Mock und das vorläufige `getFeed` auch in der Beschreibung. `%` und `_` gelten nicht als Platzhalter. | Wie im Konzept (TC13) | umgesetzt |
+| 10.4 | TC15: Liste mit 100 Einträgen | `getFeed` liefert höchstens **100** Gesuche (`maxFeedItems`), das neueste zuerst. Kein Nachladen weiterer Gesuche. | Mengengerüst. Nachladen erst, wenn es mehr aktive Gesuche gibt. | umgesetzt |
+| 10.5 | F-08: Umkreis um eine Ortschaft | Kategorie und Suchbegriff filtert die Datenbank, den Umkreis rechnet die App (FilterLogic, Pythagoras mit LV95). In der Maske kommt der Umkreis erst, «wenn Zeit bleibt». | Für höchstens 100 Gesuche reicht die Rechnung in der App | Logik umgesetzt, Maske offen |
+| 10.6 | Prüfung der Filter (Factsheet Inputvalidierung) | Mock und Supabase weisen ab (`checkFeedFilter`): Suchbegriff mit mehr als **80** Zeichen (länger als jeder Titel), unbekannte Kategorie, Umkreis ausserhalb 1–200 km. | Gleiche Regeln wie bei den Gesuchen (Abschnitt 3) | umgesetzt |
+| 10.7 | Grenzfälle (nicht im Konzept festgelegt) | Gross- und Kleinschreibung spielt keine Rolle, Leerzeichen am Rand und doppelte Leerzeichen werden ignoriert. Umlaute werden **nicht** vereinheitlicht («mobel» findet «Möbel» nicht). Ein Gesuch, das genau jetzt abläuft, ist weg (wie `expires_at > now()`). Eine Distanz genau gleich dem Umkreis zählt dazu («höchstens», UC5 Schritt 5). | Mit Unittests festgehalten | umgesetzt |
+| 10.8 | Testdaten für TC12 bis TC14 | Die Mock-Testdaten weichen von `supabase/05_testdaten.sql` ab (z.B. Leica M6 von Mia in Biel). Der Handytest mit ben@refind.test geht darum nur mit Supabase. | Mock-Daten später an 05_testdaten.sql angleichen | offen |
+| 10.9 | Masken «Entdecken» (Kategorie-Chips) und «Suchen und filtern» | In Arbeit | — | offen |

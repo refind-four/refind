@@ -6,7 +6,7 @@ import '../logic/filter_logic.dart';
 /// Schnittstelle RefindRepository.
 ///
 /// Das Repository liefert schon nur sichtbare Gesuche (bei Supabase prüft
-/// das die Datenbank, siehe supabase/09_feed.sql). Der Service wendet danach
+/// das die Datenbank, siehe supabase/10_feed.sql). Der Service wendet danach
 /// die FilterLogic an. So gelten in der App immer dieselben Regeln, egal ob
 /// Mock oder Supabase dahintersteht.
 class FeedService {

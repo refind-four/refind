@@ -364,7 +364,7 @@ class MockRefindRepository implements RefindRepository {
 
     final items = <FeedItem>[];
     for (final w in _wants) {
-      // Wie die Funktion get_feed in supabase/09_feed.sql: nur aktive,
+      // Wie die Funktion get_feed in supabase/10_feed.sql: nur aktive,
       // nicht abgelaufene Gesuche anderer Konten ohne angenommenes Angebot.
       if (w.ownerId == me || w.status != WantStatus.aktiv) continue;
       if (!w.expiresAt.isAfter(now) || _hasAcceptedOffer(w.id)) continue;

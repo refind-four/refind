@@ -262,7 +262,7 @@ class SupabaseRefindRepository implements RefindRepository {
   // ---------------------------------------------------------------------
 
   /// Welche Gesuche sichtbar sind, entscheidet die Funktion get_feed in der
-  /// Datenbank (supabase/09_feed.sql). Nur sie darf prüfen, ob es zu einem
+  /// Datenbank (supabase/10_feed.sql). Nur sie darf prüfen, ob es zu einem
   /// fremden Gesuch ein angenommenes Angebot gibt. Kategorie und Suchbegriff
   /// filtert ebenfalls die Datenbank, damit nur passende Zeilen über das
   /// Netz kommen. Den Umkreis rechnet die App (FilterLogic im FeedService).
