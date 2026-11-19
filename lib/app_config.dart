@@ -28,6 +28,12 @@ class SupabaseConfig {
   static const String url = 'https://sngoydgogjondrnrnxam.supabase.co';
   static const String publishableKey =
       'sb_publishable_h3FoHWhSjMaR6vpQOP-eGQ__mV15SiE';
+
+  /// Bucket in Supabase Storage für die Fotos der Angebote (UC6, F-09).
+  /// Noch leer: Etienne richtet die Dateiablage bis 26.11.2026 ein. Bis
+  /// dahin werden Angebote ohne Fotos gespeichert. Danach hier den Namen
+  /// eintragen, z.B. 'offer-photos'.
+  static const String? offerPhotoBucket = null;
 }
 
 /// Bereitet das Backend vor. Wird in main() vor runApp aufgerufen.
@@ -47,6 +53,9 @@ RefindRepository createRepository() {
       return MockRefindRepository();
     case RepositoryMode.supabase:
       // initBackend() hat Supabase vorher eingerichtet.
-      return SupabaseRefindRepository(Supabase.instance.client);
+      return SupabaseRefindRepository(
+        Supabase.instance.client,
+        photoBucket: SupabaseConfig.offerPhotoBucket,
+      );
   }
 }

@@ -23,3 +23,9 @@ class RepositoryException implements Exception {
   @override
   String toString() => 'RepositoryException(${kind.name}): $message';
 }
+
+/// Meldung, wenn ein Angebot nicht mehr angenommen werden kann (UC7):
+/// Gesuch nicht mehr aktiv, schon ein anderes angenommen, oder das Angebot
+/// ist abgesagt. Mock und Supabase zeigen denselben Text.
+const String acceptConflictMessage =
+    'Dieses Angebot lässt sich nicht mehr annehmen. Bitte lade die Angebote neu.';

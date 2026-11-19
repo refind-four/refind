@@ -16,12 +16,18 @@ import 'repository_exception.dart';
 /// Was jemand lesen und schreiben darf, entscheiden die RLS-Regeln in der
 /// Datenbank (supabase/02_rls_regeln.sql), nicht diese Klasse.
 ///
-/// Umgesetzt sind UC1 (Konto) und UC3 (Gesuch erfassen, Meine Gesuche).
+/// Umgesetzt sind UC1 (Konto), UC3 (Gesuch erfassen, Meine Gesuche),
+/// UC6 (Angebot senden) und UC7 (Angebote ansehen und annehmen).
 /// Die übrigen Methoden folgen mit ihren Use Cases.
 class SupabaseRefindRepository implements RefindRepository {
-  SupabaseRefindRepository(this._client);
+  SupabaseRefindRepository(this._client, {this.photoBucket});
 
   final SupabaseClient _client;
+
+  /// Name des Buckets in Supabase Storage für die Fotos der Angebote.
+  /// Solange er leer ist (Dateiablage noch nicht eingerichtet), speichert
+  /// [createOffer] das Angebot ohne Fotos. Siehe ABWEICHUNGEN.md.
+  final String? photoBucket;
 
   // ---------------------------------------------------------------------
   // Hilfsfunktionen
@@ -280,29 +286,172 @@ class SupabaseRefindRepository implements RefindRepository {
   }
 
   // ---------------------------------------------------------------------
-  // Angebote, Chat, Bewertung (UC6 bis UC9): folgen später
+  // Angebote (UC6, UC7)
   // ---------------------------------------------------------------------
 
+  /// UC6: Angebot speichern, dann die Fotos hochladen.
+  ///
+  /// Ablauf: 1. Zeile in `offer` (RLS offer_insert prüft: nicht das eigene
+  /// Gesuch, Gesuch aktiv und offen). 2. Jedes Foto nach Storage unter
+  /// `<offerId>/<n>.jpg`. 3. Je Foto eine Zeile in `photo` mit diesem Pfad.
   @override
   Future<Offer> createOffer(
     String wantId,
     int priceRappen,
     String message,
     List<File> photos,
-  ) =>
-      throw UnimplementedError('createOffer folgt mit UC6.');
+  ) async {
+    checkOffer(priceRappen, message, photos.length);
+    final text = message.trim();
+    final me = _me;
+    final row = await _guard(() async {
+      try {
+        return await _client
+            .from('offer')
+            .insert({
+              'want_id': wantId,
+              'seller_id': me,
+              'price': priceRappen,
+              'message': text.isEmpty ? null : text,
+            })
+            .select('*, seller:profile(display_name)')
+            .single();
+      } on PostgrestException catch (e) {
+        // Beim Einfügen heisst 42501: RLS offer_insert sagt nein. Das ist
+        // ein eigenes Gesuch oder eines, das keine Angebote mehr annimmt.
+        if (e.code == '42501') {
+          throw const RepositoryException(
+            RepositoryErrorKind.konflikt,
+            'Auf dieses Gesuch kannst du kein Angebot (mehr) senden.',
+          );
+        }
+        rethrow;
+      }
+    });
+    final offer = offerFromRow(row);
+    // Das Angebot ist jetzt gespeichert. Scheitern danach die Fotos, soll
+    // die Person es nicht nochmals senden (sonst gibt es zwei Angebote).
+    // Darum: Angebot ohne (alle) Fotos zurückgeben, die Maske meldet das.
+    List<Photo> saved;
+    try {
+      saved = await _uploadOfferPhotos(offer.id, photos);
+    } on RepositoryException catch (e) {
+      if (kDebugMode) debugPrint('Fotos nicht gespeichert: $e');
+      saved = const [];
+    }
+    return Offer(
+      id: offer.id,
+      wantId: offer.wantId,
+      sellerId: offer.sellerId,
+      priceRappen: offer.priceRappen,
+      message: offer.message,
+      createdAt: offer.createdAt,
+      status: offer.status,
+      photos: saved,
+      sellerName: offer.sellerName,
+    );
+  }
 
-  @override
-  Future<List<Offer>> getOffers(String wantId, OfferSort sort) =>
-      throw UnimplementedError('getOffers folgt mit UC7.');
+  /// Lädt die Fotos hoch und trägt sie in `photo` ein. Ohne [photoBucket]
+  /// (Dateiablage noch nicht eingerichtet) passiert nichts.
+  Future<List<Photo>> _uploadOfferPhotos(String offerId, List<File> photos) async {
+    final bucket = photoBucket;
+    if (photos.isEmpty) return const [];
+    if (bucket == null) {
+      if (kDebugMode) {
+        debugPrint('Fotos nicht hochgeladen: Dateiablage noch nicht eingerichtet.');
+      }
+      return const [];
+    }
+    return _guard(() async {
+      final rows = <Map<String, dynamic>>[];
+      for (var i = 0; i < photos.length; i++) {
+        final path = '$offerId/${i + 1}.jpg';
+        await _client.storage.from(bucket).upload(
+              path,
+              photos[i],
+              fileOptions: const FileOptions(contentType: 'image/jpeg'),
+            );
+        rows.add({'offer_id': offerId, 'url': path});
+      }
+      final saved = await _client.from('photo').insert(rows).select();
+      return saved.map(photoFromRow).toList();
+    });
+  }
 
+  /// UC7: Angebote zu einem Gesuch. Die RLS-Regel offer_select liefert dem
+  /// Besitzer alle Angebote, allen anderen nur die eigenen.
   @override
-  Future<void> markOffersSeen(String wantId) =>
-      throw UnimplementedError('markOffersSeen folgt mit UC7.');
+  Future<List<Offer>> getOffers(String wantId, OfferSort sort) {
+    return _guard(() async {
+      final base = _client
+          .from('offer')
+          .select('*, photo(*), seller:profile(display_name)')
+          .eq('want_id', wantId);
+      final rows = switch (sort) {
+        OfferSort.neueste => await base.order('created_at', ascending: false),
+        OfferSort.guenstigste => await base.order('price', ascending: true),
+      };
+      final offers = rows.map(offerFromRow).toList();
+      return _withPhotoUrls(offers);
+    });
+  }
 
+  /// Ersetzt die Pfade der Fotos durch Links, die eine Stunde gültig sind.
+  /// Klappt das nicht, bleiben die Pfade (die App zeigt dann ein Symbol).
+  Future<List<Offer>> _withPhotoUrls(List<Offer> offers) async {
+    final bucket = photoBucket;
+    final paths = [for (final o in offers) ...o.photos.map((p) => p.url)];
+    if (bucket == null || paths.isEmpty) return offers;
+    try {
+      final signed = await _client.storage.from(bucket).createSignedUrls(paths, 3600);
+      final urlByPath = {for (final s in signed) s.path: s.signedUrl};
+      return [
+        for (final o in offers)
+          Offer(
+            id: o.id,
+            wantId: o.wantId,
+            sellerId: o.sellerId,
+            priceRappen: o.priceRappen,
+            message: o.message,
+            createdAt: o.createdAt,
+            status: o.status,
+            sellerName: o.sellerName,
+            photos: [
+              for (final p in o.photos)
+                Photo(id: p.id, offerId: p.offerId, url: urlByPath[p.url] ?? p.url),
+            ],
+          ),
+      ];
+    } on StorageException catch (e) {
+      if (kDebugMode) debugPrint('Fotos ohne Link: $e');
+      return offers;
+    }
+  }
+
+  /// UC7: Der Käufer darf den Status eines Angebots wegen RLS nicht selbst
+  /// ändern. Darum ruft die App die Funktion mark_offers_seen auf
+  /// (supabase/09_angebote.sql).
   @override
-  Future<ChatThread> acceptOffer(String offerId) =>
-      throw UnimplementedError('acceptOffer folgt mit UC7.');
+  Future<void> markOffersSeen(String wantId) {
+    return _guard(() async {
+      await _client.rpc('mark_offers_seen', params: {'p_want_id': wantId});
+    });
+  }
+
+  /// UC7 / F-12: Angebot annehmen über die Funktion accept_offer
+  /// (supabase/08_angebot_annehmen.sql). Sie nimmt an, sagt die übrigen
+  /// ab und legt den Chat an, alles in einer Transaktion.
+  @override
+  Future<ChatThread> acceptOffer(String offerId) {
+    return _guard(() async {
+      final threadId =
+          await _client.rpc('accept_offer', params: {'p_offer_id': offerId}) as String;
+      final row =
+          await _client.from('chat_thread').select().eq('id', threadId).single();
+      return chatThreadFromRow(row);
+    });
+  }
 
   @override
   Future<List<ChatSummary>> getChats() =>
@@ -387,17 +536,57 @@ Want wantFromRow(Map<String, dynamic> row, {DateTime? now}) {
   );
 }
 
-// -----------------------------------------------------------------------
-// Fehler übersetzen
-// -----------------------------------------------------------------------
+/// Angebot mit Fotos (`photo(*)`) und Name des Verkäufers
+/// (`seller:profile(display_name)`), beides freiwillig mitgeladen.
+Offer offerFromRow(Map<String, dynamic> row) {
+  final photos = (row['photo'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+  final seller = row['seller'] as Map<String, dynamic>?;
+  return Offer(
+    id: row['id'] as String,
+    wantId: row['want_id'] as String,
+    sellerId: row['seller_id'] as String,
+    priceRappen: row['price'] as int,
+    message: (row['message'] as String?) ?? '',
+    createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
+    status: OfferStatus.values.byName(row['status'] as String),
+    photos: photos.map(photoFromRow).toList(),
+    sellerName: seller?['display_name'] as String?,
+  );
+}
 
-/// Zeile aus get_feed mit eingebetteter Region und Name des Käufers.
-FeedItem feedItemFromRow(Map<String, dynamic> row) {
+Photo photoFromRow(Map<String, dynamic> row) => Photo(
+      id: row['id'] as String,
+      offerId: row['offer_id'] as String,
+      url: row['url'] as String,
+    );
+
+ChatThread chatThreadFromRow(Map<String, dynamic> row) {
+  DateTime? time(String key) =>
+      row[key] == null ? null : DateTime.parse(row[key] as String).toLocal();
+  return ChatThread(
+    id: row['id'] as String,
+    offerId: row['offer_id'] as String,
+    wantId: row['want_id'] as String,
+    buyerId: row['buyer_id'] as String,
+    sellerId: row['seller_id'] as String,
+    lastActivity: time('last_activity')!,
+    handoverAt: time('handover_at'),
+    handoverPlace: row['handover_place'] as String?,
+    agreedPriceRappen: row['agreed_price'] as int?,
+    closedAt: time('closed_at'),
+  );
+}
+
+/// Gesuch im Feed mit Region (`region:place(*)`) und Name des Käufers
+/// (`owner:profile(display_name)`).
+FeedItem feedItemFromRow(Map<String, dynamic> row, {Place? origin}) {
+  final region = placeFromRow(row['region'] as Map<String, dynamic>);
   final owner = row['owner'] as Map<String, dynamic>?;
   return FeedItem(
     want: wantFromRow(row),
     buyerName: (owner?['display_name'] as String?) ?? 'Unbekannt',
-    region: placeFromRow(row['region'] as Map<String, dynamic>),
+    region: region,
+    distanceKm: origin?.distanceKmTo(region),
   );
 }
 
@@ -405,6 +594,10 @@ FeedItem feedItemFromRow(Map<String, dynamic> row) {
 /// Eingabe gelten sie als normale Zeichen: «100%» → «%100\%%».
 String containsPattern(String text) =>
     '%${text.replaceAllMapped(RegExp(r'[\\%_]'), (m) => '\\${m[0]}')}%';
+
+// -----------------------------------------------------------------------
+// Fehler übersetzen
+// -----------------------------------------------------------------------
 
 bool _isRateLimit(AuthException e) =>
     e.statusCode == '429' ||
@@ -472,8 +665,31 @@ Object mapSupabaseError(Object e) {
         'Das hat nicht geklappt. Bitte versuche es später nochmals.');
   }
 
+  // Dateiablage (Fotos der Angebote)
+  if (e is StorageException) {
+    switch (e.statusCode) {
+      case '413':
+        return ex(RepositoryErrorKind.ungueltigeEingabe,
+            'Ein Foto ist zu gross. Bitte wähle ein kleineres.');
+      case '401':
+      case '403':
+        return ex(RepositoryErrorKind.nichtBerechtigt,
+            'Dafür fehlt dir die Berechtigung.');
+    }
+    return ex(RepositoryErrorKind.konflikt,
+        'Die Fotos konnten nicht hochgeladen werden. Bitte versuche es später nochmals.');
+  }
+
   if (e is PostgrestException) {
     switch (e.code) {
+      // Eigene Fehler aus accept_offer (supabase/08_angebot_annehmen.sql):
+      // P0001 = Gesuch nicht mehr aktiv, schon angenommen oder Angebot
+      // abgesagt. P0002 = Angebot gibt es nicht.
+      case 'P0001':
+        return ex(RepositoryErrorKind.konflikt, acceptConflictMessage);
+      case 'P0002':
+        return ex(RepositoryErrorKind.ungueltigeEingabe,
+            'Das Angebot wurde nicht gefunden.');
       // CHECK-Regel, Fremdschlüssel, Pflichtfeld, falscher Wert, zu lang
       case '23514':
       case '23503':

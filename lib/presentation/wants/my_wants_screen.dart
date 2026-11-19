@@ -119,9 +119,14 @@ class _WantCard extends StatelessWidget {
     return Material(
       color: Colors.white,
       child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const WantDetailScreen()),
-        ),
+        onTap: () async {
+          final provider = context.read<MyWantsProvider>();
+          await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => WantDetailScreen(summary: summary)),
+          );
+          // Zähler «neue Angebote» und Status nachführen (gesehen, angenommen).
+          await provider.load();
+        },
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(

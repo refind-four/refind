@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../application/services/auth_service.dart';
 import '../application/services/feed_service.dart';
+import '../application/services/offer_service.dart';
 import '../application/services/want_service.dart';
 import '../application/state/session_provider.dart';
 import '../data/refind_repository.dart';
@@ -30,6 +31,7 @@ class RefindApp extends StatelessWidget {
         ),
         Provider(create: (_) => WantService(repository)),
         Provider(create: (_) => FeedService(repository)),
+        Provider(create: (_) => OfferService(repository)),
       ],
       child: MaterialApp(
         title: 'refind',
