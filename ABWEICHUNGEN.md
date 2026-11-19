@@ -3,8 +3,8 @@
 Bezug: *2_1_Konzeptbericht_refind*, Speicherdatum 29.10.2026.
 Stand: 19.11.2026 (KW 47), nach Anmelden/Registrieren (UC1), Gesuch erfassen (UC3),
 SupabaseRefindRepository für UC1 und UC3 (Abschnitt 8) sowie Angebot senden,
-ansehen und annehmen (UC6, UC7, Abschnitt 9) sowie dem Datenteil von
-Entdecken (UC5, Abschnitt 10).
+ansehen und annehmen (UC6, UC7, Abschnitt 9) sowie Entdecken, Suchen und
+filtern (UC5, Abschnitt 10).
 Alle Team-Entscheide wurden am 12.11.2026 vom Team bestätigt, Vinyl mit
 geänderten Zuständen (Abschnitt 4).
 
@@ -152,8 +152,8 @@ SupabaseRefindRepository (`getFeed` zuerst vorläufig, seit 19.11.2026 durch UC5
 
 | Nr. | Konzept / Erwartung | Umsetzung oder Befund | Grund / nächster Schritt | Status |
 |---|---|---|---|---|
-| 9.1 | UC6 beginnt in «Entdecken» (UC5) mit Karten, Suche und Filter | «Entdecken» zeigt **vorläufig** eine einfache Liste der aktiven Gesuche anderer Personen, jede Karte mit «Angebot senden». Das vorläufige `getFeed` im SupabaseRefindRepository (höchstens 50 Gesuche, Suche auch in der Beschreibung) ist seit dem Merge vom 19.11.2026 durch das `getFeed` aus UC5 ersetzt (Abschnitt 10). | Ohne Liste lässt sich UC6 auf dem Handy nicht testen. Die Maske wird mit UC5 ersetzt. | Übergang (Maske), `getFeed` ersetzt |
-| 9.2 | Feed zeigt keine Gesuche mit angenommenem Angebot | Gelöst mit der Funktion `get_feed` in `supabase/10_feed.sql` (siehe 10.2). Bis die Datei im SQL Editor ausgeführt ist, meldet der Feed mit Supabase einen Fehler. Zusätzlich lehnt die RLS-Regel `offer_insert` ein Angebot auf ein solches Gesuch ab («Auf dieses Gesuch kannst du kein Angebot (mehr) senden.»). | `10_feed.sql` ausführen | umgesetzt (19.11.2026), Datei noch ausführen |
+| 9.1 | UC6 beginnt in «Entdecken» (UC5) mit Karten, Suche und Filter | «Entdecken» zeigt **vorläufig** eine einfache Liste der aktiven Gesuche anderer Personen, jede Karte mit «Angebot senden». Das vorläufige `getFeed` im SupabaseRefindRepository (höchstens 50 Gesuche, Suche auch in der Beschreibung) ist seit dem Merge vom 19.11.2026 durch das `getFeed` aus UC5 ersetzt, die vorläufige Maske ebenfalls am 19.11.2026 (Abschnitt 10). `OfferService.getFeed` wird seither nicht mehr benutzt. | Ohne Liste liess sich UC6 auf dem Handy nicht testen. | ersetzt (19.11.2026), `OfferService.getFeed` kann weg |
+| 9.2 | Feed zeigt keine Gesuche mit angenommenem Angebot | Gelöst mit der Funktion `get_feed` in `supabase/10_feed.sql` (siehe 10.2). Zusätzlich lehnt die RLS-Regel `offer_insert` ein Angebot auf ein solches Gesuch ab («Auf dieses Gesuch kannst du kein Angebot (mehr) senden.»). | — | umgesetzt (19.11.2026) |
 | 9.3 | F-09: Fotos in der Dateiablage (Konzept 2.1) | Der Ablauf ist vorbereitet: Angebot speichern, Fotos nach Supabase Storage unter `<offerId>/<n>.jpg`, Pfad in `photo.url`. Beim Anzeigen erzeugt die App Links, die eine Stunde gültig sind (`createSignedUrls`, passt zu einem privaten Bucket). Solange `SupabaseConfig.offerPhotoBucket` leer ist, wird das Angebot **ohne Fotos** gespeichert, die App meldet das nach dem Senden. | Etienne richtet die Dateiablage bis 26.11.2026 ein (Bucket und Storage-Regeln). Danach Namen in `app_config.dart` eintragen und mit ben@refind.test testen. | offen (bis 26.11.2026) |
 | 9.4 | UC7: Angebote werden beim Ansehen «gesehen» (Abbildung 2) | Der Käufer darf den Status wegen RLS nicht ändern. Neue Funktion `mark_offers_seen(p_want_id)` in `supabase/09_angebote.sql`. Klappt der Aufruf nicht (z.B. Funktion noch nicht in der Datenbank), zeigt die App keinen Fehler, die Angebote bleiben «neu». | `09_angebote.sql` im SQL Editor ausführen | offen |
 | 9.5 | Prüfung auf dem Server für Angebote (Factsheet Inputvalidierung) | In der Datenbank gilt nur `price > 0` (07). `09_angebote.sql` ergänzt: Preis höchstens CHF 10'000, Nachricht höchstens 500 Zeichen, höchstens 3 Fotos pro Angebot (RLS `photo_insert`). | Werte 3.10 und 3.11 vom Team bestätigen, dann `09_angebote.sql` ausführen | offen |
@@ -166,20 +166,29 @@ SupabaseRefindRepository (`getFeed` zuerst vorläufig, seit 19.11.2026 durch UC5
 
 ## 10. Entdecken (UC5, KW 47)
 
-Stand 19.11.2026: Datenteil fertig (FilterLogic, `getFeed` in Mock und
-Supabase, FeedService, Funktion `get_feed`). Die Masken «Entdecken» und
-«Suchen und filtern» folgen. Unittests: `test/filter_logic_test.dart`,
-`test/feed_service_test.dart`, `test/mock_refind_repository_test.dart`
-(Gruppe UC5), `test/supabase_mapping_test.dart`.
+Stand 19.11.2026: FilterLogic, `getFeed` in Mock und Supabase, FeedService,
+Funktion `get_feed`, Masken «Entdecken» und «Suchen und filtern». Am
+19.11.2026 auf dem Handy mit ben@refind.test und Supabase getestet: TC12 und
+TC13 bestanden (Feed zeigt Leica Q2, Leica M6, Eames und Rolex, «Leica» nur
+die zwei Leicas). Zwei Anzeigefehler aus dem Test sind behoben (10.13,
+10.14). Tests: `test/filter_logic_test.dart`, `test/feed_service_test.dart`,
+`test/time_logic_test.dart`, `test/discover_screen_test.dart`,
+`test/mock_refind_repository_test.dart` (Gruppe UC5),
+`test/supabase_mapping_test.dart`.
 
 | Nr. | Konzept / Erwartung | Umsetzung oder Befund | Grund / nächster Schritt | Status |
 |---|---|---|---|---|
 | 10.1 | Abbildung 13: FilterLogic im Paket `logic`, «Suchbegriff, Kategorie und Distanz» | Klasse `FilterLogic` in `application/logic/filter_logic.dart` mit statischen Methoden (`matchesQuery`, `matchesCategory`, `isWithinRadius`, `isVisibleInFeed`, `apply`, `hasActiveFilter`). Zusätzlich ein neuer `FeedService` in `application/services`, der die FilterLogic auf die Liste des Repositorys anwendet. | Die Datenzugriffsschicht (Mock, Supabase) darf die Anwendungsschicht nicht kennen. Darum ruft nicht das Repository die FilterLogic auf, sondern der Service. So gelten mit Mock und Supabase dieselben Regeln. | umgesetzt |
-| 10.2 | F-06: Feed nur aktive Gesuche, ohne angenommenes Angebot | Funktion `public.get_feed()` (security invoker, RLS `want_select` gilt zusätzlich) und `private.has_accepted_offer(want_id)` (gibt nur ja/nein zurück) in `supabase/10_feed.sql`. Das Mock verhält sich gleich. | Die App darf fremde Angebote wegen RLS `offer_select` nicht lesen und kann «angenommen» deshalb nicht selbst prüfen (siehe 9.2) | umgesetzt, Datei noch im SQL Editor ausführen |
+| 10.2 | F-06: Feed nur aktive Gesuche, ohne angenommenes Angebot | Funktion `public.get_feed()` (security invoker, RLS `want_select` gilt zusätzlich) und `private.has_accepted_offer(want_id)` (gibt nur ja/nein zurück) in `supabase/10_feed.sql`. Das Mock verhält sich gleich. | Die App darf fremde Angebote wegen RLS `offer_select` nicht lesen und kann «angenommen» deshalb nicht selbst prüfen (siehe 9.2) | umgesetzt, in Supabase ausgeführt (Handytest 19.11.2026) |
 | 10.3 | F-07, UC5 Schritt 5: Suchbegriff im **Titel** | Mock und Supabase suchen nur im Titel. Vorher suchten das Mock und das vorläufige `getFeed` auch in der Beschreibung. `%` und `_` gelten nicht als Platzhalter. | Wie im Konzept (TC13) | umgesetzt |
 | 10.4 | TC15: Liste mit 100 Einträgen | `getFeed` liefert höchstens **100** Gesuche (`maxFeedItems`), das neueste zuerst. Kein Nachladen weiterer Gesuche. | Mengengerüst. Nachladen erst, wenn es mehr aktive Gesuche gibt. | umgesetzt |
 | 10.5 | F-08: Umkreis um eine Ortschaft | Kategorie und Suchbegriff filtert die Datenbank, den Umkreis rechnet die App (FilterLogic, Pythagoras mit LV95). In der Maske kommt der Umkreis erst, «wenn Zeit bleibt». | Für höchstens 100 Gesuche reicht die Rechnung in der App | Logik umgesetzt, Maske offen |
 | 10.6 | Prüfung der Filter (Factsheet Inputvalidierung) | Mock und Supabase weisen ab (`checkFeedFilter`): Suchbegriff mit mehr als **80** Zeichen (länger als jeder Titel), unbekannte Kategorie, Umkreis ausserhalb 1–200 km. | Gleiche Regeln wie bei den Gesuchen (Abschnitt 3) | umgesetzt |
 | 10.7 | Grenzfälle (nicht im Konzept festgelegt) | Gross- und Kleinschreibung spielt keine Rolle, Leerzeichen am Rand und doppelte Leerzeichen werden ignoriert. Umlaute werden **nicht** vereinheitlicht («mobel» findet «Möbel» nicht). Ein Gesuch, das genau jetzt abläuft, ist weg (wie `expires_at > now()`). Eine Distanz genau gleich dem Umkreis zählt dazu («höchstens», UC5 Schritt 5). | Mit Unittests festgehalten | umgesetzt |
 | 10.8 | Testdaten für TC12 bis TC14 | Die Mock-Testdaten weichen von `supabase/05_testdaten.sql` ab (z.B. Leica M6 von Mia in Biel). Der Handytest mit ben@refind.test geht darum nur mit Supabase. | Mock-Daten später an 05_testdaten.sql angleichen | offen |
-| 10.9 | Masken «Entdecken» (Kategorie-Chips) und «Suchen und filtern» | In Arbeit | — | offen |
+| 10.9 | Abbildung 9: «Entdecken» mit Suchfeld, Kategorie-Leiste und Karten | Wie Abbildung 9. Die Leiste zeigt «Alle» und **alle sechs** Kategorien (Abbildung 9 zeigt nur vier) und lässt sich seitlich wischen, weil auf schmalen Handys nicht alle Platz haben. Die gewählte Kategorie gilt sofort (UC5 Schritt 2) und ist mit dem Sheet abgeglichen. | F-06 verlangt alle Kategorien | umgesetzt |
+| 10.10 | Abbildung 9: Suchfeld «Wer sucht was?» | Das Feld nimmt keine Eingabe an, ein Tipp öffnet «Suchen und filtern» (UC5 Schritt 3). Ist ein Suchbegriff gesetzt, zeigt das Feld ihn an. | So steht es in UC5. Ohne Anzeige wüsste man nicht, dass ein Filter aktiv ist. | umgesetzt |
+| 10.11 | Abbildung 9: «Suchen und filtern» mit Suchbegriff («löschen»), Kategorie, Region & Umkreis | Suchbegriff mit «löschen», Kategorie und «Gesuche anzeigen». **Ohne** «Region & Umkreis» (siehe 10.5). Vorbelegt mit den aktuellen Filtern, Wischen nach unten ändert nichts. Suchbegriff mit mehr als 80 Zeichen: «Der Suchbegriff darf höchstens 80 Zeichen lang sein (jetzt N).» | F-08 laut Auftrag erst, wenn Zeit bleibt | umgesetzt ohne F-08 |
+| 10.12 | UC5 Schritt 1: «Zeit seit der Erfassung», Ladezustand | `formatSince` in `application/logic/time_logic.dart`: «gerade eben», «vor N Min», «vor N Std», «vor 1 Tag», «vor N Tagen». Liegt die Zeit wegen einer falschen Handy-Uhr in der Zukunft: «gerade eben». Ladekreis beim ersten Laden, dünner Balken beim Neuladen, «Nochmals versuchen» bei Fehlern, Neuladen durch Ziehen. Eine ältere Antwort überschreibt beim schnellen Wechseln der Kategorie nie eine neuere. | Abbildung 9 zeigt «VOR 20 MIN», «VOR 2 STD», Tage sind nicht gezeichnet | umgesetzt |
+| 10.13 | Abbildung 9: Karte mit «bis CHF 4'500» und «Angebot senden» in einer Zeile | Preis und Region stehen in **zwei Zeilen** links vom Knopf. Die Region darf umbrechen und wird nie abgeschnitten. | Handytest 19.11.2026: «bis CHF 3'800 · Be…» war abgeschnitten | umgesetzt (19.11.2026) |
+| 10.14 | Abbildung 9: Navigation mit Kreis bei ENTDECKEN | Kompass-Icon (`Icons.explore`), Umriss wenn inaktiv, gefüllt wenn aktiv, wie bei GESUCHE, CHAT und PROFIL | Handytest 19.11.2026: Der gefüllte Kreis wirkte wie ein brauner Punkt, nicht wie ein Icon | umgesetzt (19.11.2026) |
