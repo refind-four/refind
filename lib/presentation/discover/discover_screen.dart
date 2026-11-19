@@ -155,6 +155,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           : const _Message(text: 'Im Moment sucht niemand etwas.');
     }
     return ListView.separated(
+      key: const Key('feed-list'),
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
       itemCount: _items.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),

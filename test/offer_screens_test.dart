@@ -27,9 +27,9 @@ void main() {
   setUp(() => repo = MockRefindRepository(delay: Duration.zero));
 
   testWidgets('UC6: Angebot mit Preis, Nachricht und Foto senden', (tester) async {
-    await tester.runAsync(() => repo.signIn('luca@refind.test', 'refind123'));
+    await tester.runAsync(() => repo.signIn('ben@refind.test', 'refind123'));
     final item = (await tester.runAsync(() => repo.getFeed(const FeedFilter())))!
-        .firstWhere((i) => i.want.id == 'want-5'); // Leica M6 von Mia
+        .firstWhere((i) => i.want.id == 'want-leica-m6'); // Leica M6 von Anna
     Offer? result;
 
     await tester.pumpWidget(host(
@@ -56,8 +56,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Bitte gib einen Preis ein.'), findsOneWidget);
 
-    // Über Budget (CHF 2'200): Hinweis für den Verkäufer
-    await tester.enterText(find.byKey(const Key('offer-price')), '2300');
+    // Über Budget (CHF 2'800): Hinweis für den Verkäufer
+    await tester.enterText(find.byKey(const Key('offer-price')), '2900');
     await tester.pump();
     expect(find.textContaining('über der Preisobergrenze'), findsOneWidget);
 
@@ -81,7 +81,7 @@ void main() {
   });
 
   testWidgets('F-09: nach drei Fotos kein weiteres', (tester) async {
-    await tester.runAsync(() => repo.signIn('luca@refind.test', 'refind123'));
+    await tester.runAsync(() => repo.signIn('ben@refind.test', 'refind123'));
     final item = (await tester.runAsync(() => repo.getFeed(const FeedFilter())))!.first;
     await tester.pumpWidget(host(
       repo,
@@ -104,7 +104,8 @@ void main() {
       (tester) async {
     await tester.runAsync(() => repo.signIn('anna@refind.test', 'refind123'));
     final summary =
-        (await tester.runAsync(repo.getMyWants))!.firstWhere((s) => s.want.id == 'want-1');
+        (await tester.runAsync(repo.getMyWants))!
+            .firstWhere((s) => s.want.id == 'want-eames'); // Budget CHF 2'000
 
     await tester.pumpWidget(host(repo, WantDetailScreen(summary: summary)));
     await tester.pumpAndSettle();
@@ -114,25 +115,25 @@ void main() {
         .widgetList<Text>(find.textContaining(RegExp(r"^CHF \d")))
         .map((t) => t.data)
         .toList();
-    expect(prices, ["CHF 2'300", "CHF 2'450", "CHF 2'650"]);
+    expect(prices, ["CHF 1'720", "CHF 1'950", "CHF 2'100"]);
 
-    // F-11: nur Mias Angebot über CHF 2'500 ist markiert
-    expect(find.byKey(const Key('over-budget-offer-4')), findsOneWidget);
-    expect(find.text('ÜBER BUDGET +CHF 150'), findsOneWidget);
-    expect(find.byKey(const Key('over-budget-offer-1')), findsNothing);
+    // F-11: nur Bens zweites Angebot über CHF 2'000 ist markiert
+    expect(find.byKey(const Key('over-budget-offer-eames-ben-2')), findsOneWidget);
+    expect(find.text('ÜBER BUDGET +CHF 100'), findsOneWidget);
+    expect(find.byKey(const Key('over-budget-offer-eames-ben-1')), findsNothing);
 
     // F-12: annehmen, bestätigen, Chat öffnet sich
-    await tester.ensureVisible(find.byKey(const Key('accept-offer-1')));
-    await tester.tap(find.byKey(const Key('accept-offer-1')));
+    await tester.ensureVisible(find.byKey(const Key('accept-offer-eames-ben-1')));
+    await tester.tap(find.byKey(const Key('accept-offer-eames-ben-1')));
     await tester.pumpAndSettle();
     expect(find.text('Angebot annehmen?'), findsOneWidget);
     await tester.tap(find.widgetWithText(TextButton, 'Annehmen'));
     await tester.pumpAndSettle();
 
     final chat = tester.widget<ChatScreen>(find.byType(ChatScreen));
-    expect(chat.thread?.offerId, 'offer-1');
+    expect(chat.thread?.offerId, 'offer-eames-ben-1');
     final offers = (await tester.runAsync(
-        () => repo.getOffers('want-1', OfferSort.neueste)))!;
+        () => repo.getOffers('want-eames', OfferSort.neueste)))!;
     expect(offers.where((o) => o.status == OfferStatus.abgesagt), hasLength(2));
   });
 }

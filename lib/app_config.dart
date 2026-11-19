@@ -10,7 +10,7 @@ enum RepositoryMode { mock, supabase }
 
 /// Hier umschalten:
 /// * [RepositoryMode.mock]: Testdaten im Speicher, ohne Internet
-///   (Konten anna/luca/mia@refind.test, Passwort refind123)
+///   (Konten anna/ben/cara@refind.test, Passwort refind123, wie 05_testdaten.sql)
 /// * [RepositoryMode.supabase]: echtes Backend, braucht Internet
 ///
 /// Nach dem Umschalten genügt Hot Reload nicht, weil main() neu laufen

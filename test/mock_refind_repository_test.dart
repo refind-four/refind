@@ -5,6 +5,9 @@ import 'package:refind/data/mock_refind_repository.dart';
 import 'package:refind/data/repository_exception.dart';
 import 'package:refind/model/model.dart';
 
+// Testdaten wie supabase/05_testdaten.sql: Anna (Käuferin, alle aktiven
+// Gesuche), Ben (Verkäufer, keine eigenen Gesuche), Cara.
+
 void main() {
   late MockRefindRepository repo;
 
@@ -12,7 +15,8 @@ void main() {
 
   test('Anmelden mit Testkonto liefert das Profil', () async {
     final user = await repo.signIn('anna@refind.test', 'refind123');
-    expect(user.displayName, 'Anna Keller');
+    expect(user.displayName, 'Anna');
+    expect(user.cityId, 1); // Bern
   });
 
   test('Falsches Passwort wirft nichtBerechtigt', () async {
@@ -59,36 +63,37 @@ void main() {
   });
 
   test('Feed zeigt keine eigenen Gesuche', () async {
+    // Alle aktiven Gesuche der Testdaten gehören Anna.
     await repo.signIn('anna@refind.test', 'refind123');
-    final feed = await repo.getFeed(const FeedFilter());
-    expect(feed, isNotEmpty);
-    expect(feed.every((item) => item.want.ownerId != 'user-anna'), isTrue);
+    expect(await repo.getFeed(const FeedFilter()), isEmpty);
   });
 
   test('Angebot annehmen sagt die übrigen ab', () async {
     await repo.signIn('anna@refind.test', 'refind123');
-    await repo.acceptOffer('offer-1');
-    final offers = await repo.getOffers('want-1', OfferSort.neueste);
+    await repo.acceptOffer('offer-eames-ben-1');
+    final offers = await repo.getOffers('want-eames', OfferSort.neueste);
     final statusById = {for (final o in offers) o.id: o.status};
-    expect(statusById['offer-1'], OfferStatus.angenommen);
-    expect(statusById['offer-2'], OfferStatus.abgesagt);
+    expect(statusById['offer-eames-ben-1'], OfferStatus.angenommen);
+    expect(statusById['offer-eames-cara'], OfferStatus.abgesagt);
+    expect(statusById['offer-eames-ben-2'], OfferStatus.abgesagt);
   });
 
   group('UC6: Angebot senden', () {
-    setUp(() => repo.signIn('luca@refind.test', 'refind123'));
+    setUp(() => repo.signIn('ben@refind.test', 'refind123'));
 
     test('gültiges Angebot ist neu und erscheint beim Besitzer', () async {
-      final offer = await repo.createOffer(
-          'want-5', 210000, '  M6 mit Summicron  ', [File('a.jpg'), File('b.jpg')]);
+      final offer = await repo.createOffer('want-leica-m6', 210000,
+          '  M6 mit Summicron  ', [File('a.jpg'), File('b.jpg')]);
       expect(offer.status, OfferStatus.neu);
       expect(offer.message, 'M6 mit Summicron');
       expect(offer.photos, hasLength(2));
-      expect(offer.sellerName, 'Luca Brunner');
+      expect(offer.sellerName, 'Ben');
 
       await repo.signOut();
-      await repo.signIn('mia@refind.test', 'refind123');
-      final offers = await repo.getOffers('want-5', OfferSort.neueste);
-      expect(offers.single.id, offer.id);
+      await repo.signIn('anna@refind.test', 'refind123');
+      final offers = await repo.getOffers('want-leica-m6', OfferSort.neueste);
+      // neuestes zuerst, danach das Angebot von Cara aus den Testdaten
+      expect(offers.map((o) => o.id), [offer.id, 'offer-m6-cara']);
     });
 
     for (final (name, price, message, photos) in [
@@ -100,8 +105,8 @@ void main() {
     ]) {
       test('$name wird abgelehnt', () async {
         await expectLater(
-          repo.createOffer(
-              'want-5', price, message, [for (var i = 0; i < photos; i++) File('$i.jpg')]),
+          repo.createOffer('want-leica-m6', price, message,
+              [for (var i = 0; i < photos; i++) File('$i.jpg')]),
           throwsA(isA<RepositoryException>().having(
               (e) => e.kind, 'kind', RepositoryErrorKind.ungueltigeEingabe)),
         );
@@ -109,8 +114,11 @@ void main() {
     }
 
     test('auf eigenes Gesuch: nichtBerechtigt', () async {
+      // Ben hat keine eigenen Gesuche, darum als Anna.
+      await repo.signOut();
+      await repo.signIn('anna@refind.test', 'refind123');
       await expectLater(
-        repo.createOffer('want-3', 70000, '', const []),
+        repo.createOffer('want-rolex', 700000, '', const []),
         throwsA(isA<RepositoryException>()
             .having((e) => e.kind, 'kind', RepositoryErrorKind.nichtBerechtigt)),
       );
@@ -118,7 +126,15 @@ void main() {
 
     test('auf pausiertes Gesuch: konflikt', () async {
       await expectLater(
-        repo.createOffer('want-2', 400000, '', const []),
+        repo.createOffer('want-fujifilm', 120000, '', const []),
+        throwsA(isA<RepositoryException>()
+            .having((e) => e.kind, 'kind', RepositoryErrorKind.konflikt)),
+      );
+    });
+
+    test('auf Gesuch mit angenommenem Angebot: konflikt', () async {
+      await expectLater(
+        repo.createOffer('want-omega', 600000, '', const []),
         throwsA(isA<RepositoryException>()
             .having((e) => e.kind, 'kind', RepositoryErrorKind.konflikt)),
       );
@@ -129,43 +145,44 @@ void main() {
     setUp(() => repo.signIn('anna@refind.test', 'refind123'));
 
     test('F-10: nach Preis sortiert, mit Namen der Verkäufer', () async {
-      final offers = await repo.getOffers('want-1', OfferSort.guenstigste);
-      expect(offers.map((o) => o.priceRappen), [230000, 245000, 265000]);
-      expect(offers.first.sellerName, 'Luca Brunner');
+      final offers = await repo.getOffers('want-eames', OfferSort.guenstigste);
+      expect(offers.map((o) => o.priceRappen), [172000, 195000, 210000]);
+      expect(offers.map((o) => o.sellerName), ['Ben', 'Cara', 'Ben']);
     });
 
     test('nach Datum: neuestes zuerst', () async {
-      final offers = await repo.getOffers('want-1', OfferSort.neueste);
-      expect(offers.map((o) => o.id), ['offer-4', 'offer-1', 'offer-2']);
+      final offers = await repo.getOffers('want-eames', OfferSort.neueste);
+      expect(offers.map((o) => o.id),
+          ['offer-eames-ben-2', 'offer-eames-cara', 'offer-eames-ben-1']);
     });
 
     test('fremdes Gesuch: nichtBerechtigt', () async {
       await expectLater(
-        repo.getOffers('want-3', OfferSort.neueste),
+        repo.getOffers('want-makita', OfferSort.neueste), // gehört Cara
         throwsA(isA<RepositoryException>()
             .having((e) => e.kind, 'kind', RepositoryErrorKind.nichtBerechtigt)),
       );
     });
 
     test('markOffersSeen: neu wird gesehen', () async {
-      await repo.markOffersSeen('want-1');
-      final offers = await repo.getOffers('want-1', OfferSort.neueste);
+      await repo.markOffersSeen('want-eames');
+      final offers = await repo.getOffers('want-eames', OfferSort.neueste);
       expect(offers.every((o) => o.status == OfferStatus.gesehen), isTrue);
     });
 
     test('F-12: Chat zwischen Käuferin und Verkäufer', () async {
-      final thread = await repo.acceptOffer('offer-4');
+      final thread = await repo.acceptOffer('offer-eames-ben-2');
       expect(thread.buyerId, 'user-anna');
-      expect(thread.sellerId, 'user-mia');
-      expect(thread.offerId, 'offer-4');
+      expect(thread.sellerId, 'user-ben');
+      expect(thread.offerId, 'offer-eames-ben-2');
       final chats = await repo.getChats();
       expect(chats.map((c) => c.thread.id), contains(thread.id));
     });
 
     test('zweites Annehmen: konflikt mit verständlicher Meldung', () async {
-      await repo.acceptOffer('offer-1');
+      await repo.acceptOffer('offer-eames-ben-1');
       await expectLater(
-        repo.acceptOffer('offer-2'),
+        repo.acceptOffer('offer-eames-cara'),
         throwsA(isA<RepositoryException>()
             .having((e) => e.kind, 'kind', RepositoryErrorKind.konflikt)
             .having((e) => e.message, 'message', acceptConflictMessage)),
@@ -174,9 +191,9 @@ void main() {
 
     test('Angebot anderer Leute annehmen: nichtBerechtigt', () async {
       await repo.signOut();
-      await repo.signIn('luca@refind.test', 'refind123');
+      await repo.signIn('ben@refind.test', 'refind123');
       await expectLater(
-        repo.acceptOffer('offer-2'),
+        repo.acceptOffer('offer-eames-cara'),
         throwsA(isA<RepositoryException>()
             .having((e) => e.kind, 'kind', RepositoryErrorKind.nichtBerechtigt)),
       );
@@ -216,7 +233,7 @@ void main() {
     test('TC07: Gesuch erscheint im Feed eines zweiten Kontos', () async {
       final want = await repo.createWant(draft());
       await repo.signOut();
-      await repo.signIn('luca@refind.test', 'refind123');
+      await repo.signIn('ben@refind.test', 'refind123');
       final feed = await repo.getFeed(const FeedFilter());
       expect(feed.map((i) => i.want.id), contains(want.id));
     });
@@ -249,26 +266,39 @@ void main() {
       return [for (final i in feed) i.want.title];
     }
 
-    setUp(() => repo.signIn('luca@refind.test', 'refind123'));
+    // Wie der Handytest mit ben@refind.test und supabase/05_testdaten.sql
+    setUp(() => repo.signIn('ben@refind.test', 'refind123'));
 
     test('TC12: nur aktive Gesuche anderer Konten, neueste zuerst', () async {
       expect(await titles(), [
-        'Leica M6', // Mia, heute
-        'Omega Seamaster 300', // Anna, vor 2 Tagen
+        'Leica Q2', // vor 1 Tag
+        'Leica M6', // vor 3 Tagen
+        'Eames Lounge Chair', // vor 4 Tagen
+        'Rolex Datejust 36', // vor 5 Tagen
       ]);
-      // nicht dabei: Eames (pausiert), Pink Floyd (Angebot angenommen),
-      // Rennvelo und Makita (eigene Gesuche von Luca)
+      // nicht dabei: Omega (Angebot angenommen), Fujifilm (pausiert),
+      // Technics (abgelaufen), Brompton, Makita, Miles Davis (erledigt)
     });
 
     test('TC12: Kategorie Uhren', () async {
       expect(await titles(const FeedFilter(category: 'Uhren')),
-          ['Omega Seamaster 300']);
+          ['Rolex Datejust 36']);
     });
 
     test('TC13: Suchbegriff nur im Titel, nicht in der Beschreibung', () async {
-      expect(await titles(const FeedFilter(query: 'leica')), ['Leica M6']);
-      // «Box» steht nur in der Beschreibung des Omega-Gesuchs
-      expect(await titles(const FeedFilter(query: 'Box')), isEmpty);
+      expect(await titles(const FeedFilter(query: 'leica')),
+          ['Leica Q2', 'Leica M6']);
+      // «Summicron» steht nur in der Beschreibung der Leica M6
+      expect(await titles(const FeedFilter(query: 'Summicron')), isEmpty);
+    });
+
+    test('TC14: Winterthur mit 20 km: Leica M6 ja, Gesuche aus Bern nein',
+        () async {
+      // Das Repository liefert die Distanz, den Umkreis wendet FeedService an.
+      final feed = await repo.getFeed(const FeedFilter(placeId: 3, radiusKm: 20));
+      final m6 = feed.firstWhere((i) => i.want.id == 'want-leica-m6');
+      expect(m6.region.name, 'Winterthur');
+      expect(feed.where((i) => i.region.name == 'Bern'), isEmpty);
     });
 
     test('Suchbegriff zu lang oder unbekannte Kategorie wird abgewiesen', () async {
@@ -293,5 +323,14 @@ void main() {
             (e) => e.kind, 'kind', RepositoryErrorKind.nichtBerechtigt)),
       );
     });
+  });
+
+  test('Profil-Statistik: Ben hat drei Geschäfte mit 5, 4 und 3 Sternen',
+      () async {
+    await repo.signIn('anna@refind.test', 'refind123');
+    final stats = await repo.getProfileStats('user-ben');
+    expect(stats.dealCount, 3);
+    expect(stats.averageStars, 4.0);
+    expect(stats.activeWantCount, 0);
   });
 }

@@ -181,7 +181,7 @@ void main() {
 
       // Schritt 3: Details, Region aus dem Wohnort vorbelegt
       expect(find.text('Wie viel, welcher Zustand?'), findsOneWidget);
-      expect(find.text('Bern + 25 km'), findsOneWidget);
+      expect(find.text('Bern + 20 km'), findsOneWidget);
       expect(find.text('14 Tage sichtbar'), findsOneWidget);
       expect(find.text('CHF 0'), findsWidgets);
       await tapWeiter(tester);
@@ -191,25 +191,25 @@ void main() {
       // Region und Umkreis über das Sheet ändern, dann wieder zurück
       await tester.tap(find.byKey(const Key('want-region')));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(const Key('region-search')), 'Thun');
+      await tester.enterText(find.byKey(const Key('region-search')), 'Winter');
       await tester.pumpAndSettle();
-      await tester.tap(find.text('3600 Thun'));
+      await tester.tap(find.text('8400 Winterthur'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('50 km'));
       await tester.tap(find.text('Übernehmen'));
       await tester.pumpAndSettle();
-      expect(find.text('Thun + 50 km'), findsOneWidget);
+      expect(find.text('Winterthur + 50 km'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('want-region')));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(const Key('region-search')), '3011');
+      await tester.enterText(find.byKey(const Key('region-search')), '3000');
       await tester.pumpAndSettle();
-      await tester.tap(find.text('3011 Bern'));
+      await tester.tap(find.text('3000 Bern'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('25 km'));
+      await tester.tap(find.text('20 km'));
       await tester.tap(find.text('Übernehmen'));
       await tester.pumpAndSettle();
-      expect(find.text('Bern + 25 km'), findsOneWidget);
+      expect(find.text('Bern + 20 km'), findsOneWidget);
 
       // Laufzeit ändern
       await tester.tap(find.byKey(const Key('want-duration')));

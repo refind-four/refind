@@ -10,10 +10,10 @@ import 'repository_exception.dart';
 /// Hält Beispieldaten im Speicher und braucht kein Netz. Nach einem
 /// Neustart der App sind alle Änderungen wieder weg.
 ///
-/// Testkonten (Passwort jeweils `refind123`):
-/// * anna@refind.test – Anna Keller, Bern
-/// * luca@refind.test – Luca Brunner, Thun
-/// * mia@refind.test  – Mia Schmid, Biel
+/// Testkonten (Passwort jeweils `refind123`), wie in supabase/05_testdaten.sql:
+/// * anna@refind.test – Anna, Bern, Käuferin mit 9 Gesuchen
+/// * ben@refind.test  – Ben, Zürich, Verkäufer, keine eigenen Gesuche
+/// * cara@refind.test – Cara, ohne Wohnort, Verkäuferin und Käuferin (Makita)
 class MockRefindRepository implements RefindRepository {
   MockRefindRepository({this.delay = const Duration(milliseconds: 400)}) {
     _seed();
@@ -650,40 +650,51 @@ class MockRefindRepository implements RefindRepository {
   // Testdaten
   // ---------------------------------------------------------------------
 
+  /// Dieselben Testdaten wie `supabase/05_testdaten.sql`, damit Mock und
+  /// Supabase dasselbe zeigen und die Testfälle (TC09 bis TC14) mit beiden
+  /// gleich ablaufen. Bei Änderungen beide Stellen nachführen.
   void _seed() {
     final now = DateTime.now();
 
+    // 1. Ortschaften (LV95, Stadtzentrum, auf etwa 100 m gerundet)
     _places.addAll(const [
-      Place(id: 1, plz: 3011, name: 'Bern', e: 2600670, n: 1199655),
-      Place(id: 2, plz: 3600, name: 'Thun', e: 2614600, n: 1178700),
-      Place(id: 3, plz: 2502, name: 'Biel/Bienne', e: 2585300, n: 1220900),
-      Place(id: 4, plz: 3400, name: 'Burgdorf', e: 2614200, n: 1211800),
-      Place(id: 5, plz: 3800, name: 'Interlaken', e: 2632800, n: 1170800),
-      Place(id: 6, plz: 8001, name: 'Zürich', e: 2683200, n: 1247600),
-      Place(id: 7, plz: 4051, name: 'Basel', e: 2611300, n: 1267300),
-      Place(id: 8, plz: 3074, name: 'Muri bei Bern', e: 2603300, n: 1197800),
+      Place(id: 1, plz: 3000, name: 'Bern', e: 2600670, n: 1199655),
+      Place(id: 2, plz: 8001, name: 'Zürich', e: 2683100, n: 1247500),
+      Place(id: 3, plz: 8400, name: 'Winterthur', e: 2697000, n: 1261800),
+      Place(id: 4, plz: 4001, name: 'Basel', e: 2611300, n: 1267500),
+      Place(id: 5, plz: 6003, name: 'Luzern', e: 2666200, n: 1211500),
+      Place(id: 6, plz: 9000, name: 'St. Gallen', e: 2746000, n: 1254500),
+      Place(id: 7, plz: 1003, name: 'Lausanne', e: 2538000, n: 1152500),
+      Place(id: 8, plz: 1201, name: 'Genève', e: 2500200, n: 1118000),
     ]);
+    const bern = 1, zuerich = 2, winterthur = 3;
 
-    void user(String id, String name, String mail, int cityId, int monthsAgo) {
+    // 2b. Konten und Profile
+    void user(String id, String name, String mail, int? cityId, int radiusKm,
+        DateTime memberSince) {
       _users[id] = User(
         id: id,
         displayName: name,
         cityId: cityId,
-        radiusKm: 25,
-        memberSince: DateTime(now.year, now.month - monthsAgo, 1),
+        radiusKm: radiusKm,
+        memberSince: memberSince,
       );
       _credentials[mail] = _Credentials('refind123', id);
     }
 
-    user('user-anna', 'Anna Keller', 'anna@refind.test', 1, 8);
-    user('user-luca', 'Luca Brunner', 'luca@refind.test', 2, 5);
-    user('user-mia', 'Mia Schmid', 'mia@refind.test', 3, 2);
+    user('user-anna', 'Anna', 'anna@refind.test', bern, 20, DateTime(2026, 9, 1));
+    user('user-ben', 'Ben', 'ben@refind.test', zuerich, 30, DateTime(2026, 8, 15));
+    user('user-cara', 'Cara', 'cara@refind.test', null, 20, DateTime(2026, 10, 20));
 
-    Want want(String id, String owner, String title, String category,
+    DateTime ago(Duration d) => now.subtract(d);
+    Duration days(int n) => Duration(days: n);
+    Duration hours(int n) => Duration(hours: n);
+
+    void want(String id, String owner, String title, String category,
         String description, int budget, String condition, int region,
-        {int daysAgo = 1, WantStatus status = WantStatus.aktiv}) {
-      final created = now.subtract(Duration(days: daysAgo));
-      return Want(
+        int radiusKm, Duration age, int durationDays, WantStatus status) {
+      final created = ago(age);
+      _wants.add(Want(
         id: id,
         ownerId: owner,
         title: title,
@@ -692,73 +703,167 @@ class MockRefindRepository implements RefindRepository {
         budgetMaxRappen: budget,
         condition: condition,
         regionId: region,
-        radiusKm: 30,
+        radiusKm: radiusKm,
         createdAt: created,
-        expiresAt: created.add(const Duration(days: 30)),
+        expiresAt: created.add(days(durationDays)),
         status: status,
-      );
+      ));
     }
 
-    _wants.addAll([
-      want('want-1', 'user-anna', 'Omega Seamaster 300', 'Uhren',
-          'Suche eine Seamaster 300 aus den 60er-Jahren, gerne mit Box.',
-          250000, 'Original', 1, daysAgo: 2),
-      want('want-2', 'user-anna', 'Eames Lounge Chair', 'Möbel',
-          'Original Vitra, Leder schwarz, Nussbaum.', 450000, 'Egal', 1,
-          daysAgo: 10, status: WantStatus.pausiert),
-      want('want-3', 'user-luca', 'Rennvelo Rahmengrösse 56', 'Velo',
-          'Stahlrahmen, gerne Columbus-Rohre, fahrbereit.', 80000,
-          'Fahrbereit', 2, daysAgo: 1),
-      want('want-4', 'user-mia', 'Pink Floyd – The Wall (Erstpressung)', 'Vinyl',
-          'UK-Erstpressung 1979, Cover ohne Risse.', 15000,
-          'Gebraucht (leichtes Knistern ok)', 3,
-          daysAgo: 4),
-      want('want-5', 'user-mia', 'Leica M6', 'Kameras',
-          'Body reicht, Objektiv wäre ein Bonus.', 220000, 'Voll funktionsfähig', 3,
-          daysAgo: 0),
-      want('want-6', 'user-luca', 'Makita Akkuschrauber 18 V', 'Werkzeug',
-          'Mit zwei Akkus und Ladegerät.', 12000, 'Gebraucht', 4,
-          daysAgo: 3),
-    ]);
+    void offer(String id, String wantId, String seller, int price,
+        String message, Duration age, OfferStatus status) {
+      _offers.add(Offer(
+        id: id,
+        wantId: wantId,
+        sellerId: seller,
+        priceRappen: price,
+        message: message,
+        createdAt: ago(age),
+        status: status,
+        sellerName: _users[seller]!.displayName,
+      ));
+    }
 
-    _offers.addAll([
-      Offer(id: 'offer-1', wantId: 'want-1', sellerId: 'user-luca',
-          priceRappen: 230000, message: 'Habe eine von 1967, frisch serviciert.',
-          createdAt: now.subtract(const Duration(hours: 20)),
-          status: OfferStatus.neu),
-      Offer(id: 'offer-2', wantId: 'want-1', sellerId: 'user-mia',
-          priceRappen: 245000, message: 'Originalzustand mit Box und Papieren.',
-          createdAt: now.subtract(const Duration(hours: 30)),
-          status: OfferStatus.gesehen),
-      // Liegt über der Preisobergrenze von CHF 2'500 (F-11).
-      Offer(id: 'offer-4', wantId: 'want-1', sellerId: 'user-mia',
-          priceRappen: 265000, message: 'Seamaster 300 von 1964, mit Revision.',
-          createdAt: now.subtract(const Duration(hours: 5)),
-          status: OfferStatus.neu),
-      Offer(id: 'offer-3', wantId: 'want-4', sellerId: 'user-anna',
-          priceRappen: 14000, message: 'Erstpressung, Vinyl in sehr gutem Zustand.',
-          createdAt: now.subtract(const Duration(days: 3)),
-          status: OfferStatus.angenommen),
-    ]);
+    void message(String id, String threadId, String sender, String body,
+        Duration age, {Duration? readAgo}) {
+      _messages.add(Message(
+        id: id,
+        threadId: threadId,
+        senderId: sender,
+        kind: MessageKind.text,
+        body: body,
+        createdAt: ago(age),
+        readAt: readAgo == null ? null : ago(readAgo),
+      ));
+    }
 
+    // Abgeschlossenes Geschäft mit Chat und Bewertung (3f)
+    void deal(String threadId, String offerId, String wantId, String buyer,
+        String seller, Duration closedAgo, int agreedPrice, String place,
+        Duration? handoverAgo, int stars) {
+      _threads.add(ChatThread(
+        id: threadId,
+        offerId: offerId,
+        wantId: wantId,
+        buyerId: buyer,
+        sellerId: seller,
+        lastActivity: ago(closedAgo),
+        handoverAt: handoverAgo == null ? null : ago(handoverAgo),
+        handoverPlace: place,
+        agreedPriceRappen: agreedPrice,
+        closedAt: ago(closedAgo),
+      ));
+      _ratings.add(Rating(
+        id: 'rating-$threadId',
+        fromUserId: buyer,
+        toUserId: seller,
+        threadId: threadId,
+        stars: stars,
+        createdAt: ago(closedAgo),
+      ));
+    }
+
+    // 2c/2d. «Omega Speedmaster» von Anna: Bens Angebot angenommen,
+    //        Caras zwei Angebote dadurch abgesagt
+    want('want-omega', 'user-anna', 'Omega Speedmaster', 'Uhren',
+        'Moonwatch, gerne mit Box und Papieren.', 650000, 'Original',
+        bern, 50, days(2), 14, WantStatus.aktiv);
+    offer('offer-omega-ben', 'want-omega', 'user-ben', 590000,
+        'Speedmaster Professional 2019, serviciert, mit Box und Papieren.',
+        days(1) + hours(20), OfferStatus.angenommen);
+    offer('offer-omega-cara-1', 'want-omega', 'user-cara', 620000,
+        'Speedmaster Reduced, guter Zustand, ohne Papiere.',
+        days(1) + hours(6), OfferStatus.abgesagt);
+    offer('offer-omega-cara-2', 'want-omega', 'user-cara', 640000,
+        'Speedmaster Moonwatch Hesalite, Erstbesitz.',
+        hours(3), OfferStatus.abgesagt);
+
+    // 2e. Chat zwischen Anna (Käuferin) und Ben (Verkäufer)
     _threads.add(ChatThread(
-      id: 'thread-1',
-      offerId: 'offer-3',
-      wantId: 'want-4',
-      buyerId: 'user-mia',
-      sellerId: 'user-anna',
-      lastActivity: now.subtract(const Duration(hours: 2)),
+      id: 'thread-omega',
+      offerId: 'offer-omega-ben',
+      wantId: 'want-omega',
+      buyerId: 'user-anna',
+      sellerId: 'user-ben',
+      lastActivity: ago(days(1)),
     ));
+    message('msg-omega-1', 'thread-omega', 'user-anna',
+        'Hallo Ben, wann war der letzte Service?', days(1) + hours(2),
+        readAgo: days(1) + hours(1));
+    message('msg-omega-2', 'thread-omega', 'user-ben',
+        'Hallo Anna, im März 2025 bei Omega. Die Quittung ist dabei.',
+        days(1) + hours(1), readAgo: days(1));
+    message('msg-omega-3', 'thread-omega', 'user-anna',
+        'Super. Könnte ich die Uhr am Samstag in Zürich anschauen?', days(1));
 
-    _messages.addAll([
-      Message(id: 'msg-1', threadId: 'thread-1', senderId: 'user-mia',
-          kind: MessageKind.text, body: 'Hallo Anna, wann könnten wir uns treffen?',
-          createdAt: now.subtract(const Duration(hours: 3)),
-          readAt: now.subtract(const Duration(hours: 2, minutes: 30))),
-      Message(id: 'msg-2', threadId: 'thread-1', senderId: 'user-anna',
-          kind: MessageKind.text, body: 'Samstag am Bahnhof Bern ginge gut.',
-          createdAt: now.subtract(const Duration(hours: 2))),
-    ]);
+    // 3a. «Leica M6» von Anna, Region Winterthur, ein Angebot von Cara
+    want('want-leica-m6', 'user-anna', 'Leica M6', 'Kameras',
+        'Gehäuse, gerne mit 50 mm Summicron.', 280000, 'Voll funktionsfähig',
+        winterthur, 20, days(3), 30, WantStatus.aktiv);
+    offer('offer-m6-cara', 'want-leica-m6', 'user-cara', 265000,
+        'M6 TTL von 1998, Belichtungsmesser funktioniert.', days(1),
+        OfferStatus.neu);
+
+    // 3b. «Leica Q2» von Anna, 3 Angebote (TC09)
+    want('want-leica-q2', 'user-anna', 'Leica Q2', 'Kameras', '', 380000,
+        'Egal', bern, 30, days(1), 7, WantStatus.aktiv);
+    offer('offer-q2-ben', 'want-leica-q2', 'user-ben', 360000,
+        'Q2 von 2021, mit zweitem Akku.', hours(20), OfferStatus.gesehen);
+    offer('offer-q2-cara-1', 'want-leica-q2', 'user-cara', 345000,
+        'Q2 mit Gebrauchsspuren am Gehäuse.', hours(8), OfferStatus.neu);
+    offer('offer-q2-cara-2', 'want-leica-q2', 'user-cara', 375000,
+        'Q2 wie neu, Garantie bis 2027.', hours(2), OfferStatus.neu);
+
+    // 3c. «Rolex Datejust 36» von Anna, aktiv
+    want('want-rolex', 'user-anna', 'Rolex Datejust 36', 'Uhren',
+        'Stahl, Zifferblatt silber oder blau.', 700000, 'Serviciert',
+        bern, 50, days(5), 30, WantStatus.aktiv);
+
+    // 3c2. «Fujifilm X100V» von Anna, pausiert
+    want('want-fujifilm', 'user-anna', 'Fujifilm X100V', 'Kameras',
+        'Silber, gerne mit Originalverpackung.', 130000, 'Voll funktionsfähig',
+        bern, 30, days(6), 14, WantStatus.pausiert);
+
+    // 3d. «Eames Lounge Chair» von Anna, Budget CHF 2'000, Bens zweites
+    //     Angebot (CHF 2'100) liegt über dem Budget (F-11)
+    want('want-eames', 'user-anna', 'Eames Lounge Chair', 'Möbel',
+        'Mit Ottomane, Leder schwarz.', 200000, 'Gebraucht',
+        bern, 50, days(4), 14, WantStatus.aktiv);
+    offer('offer-eames-ben-1', 'want-eames', 'user-ben', 172000,
+        'Lizenzversion, Leder mit Gebrauchsspuren.', days(3), OfferStatus.neu);
+    offer('offer-eames-cara', 'want-eames', 'user-cara', 195000,
+        'Original Vitra, 2015 gekauft.', days(2), OfferStatus.neu);
+    offer('offer-eames-ben-2', 'want-eames', 'user-ben', 210000,
+        'Original Vitra, wie neu, mit Rechnung.', hours(5), OfferStatus.neu);
+
+    // 3e. Abgelaufenes Gesuch von Anna (vor 6 Tagen abgelaufen)
+    want('want-technics', 'user-anna', 'Technics SL-1200', 'Vinyl', '', 60000,
+        'Egal', bern, 20, days(20), 14, WantStatus.abgelaufen);
+
+    // 3f. Drei erledigte Gesuche, Ben hat verkauft (5, 4 und 3 Sterne)
+    want('want-brompton', 'user-anna', 'Brompton M6L', 'Velo', '', 150000,
+        'Fahrbereit', bern, 100, days(60), 30, WantStatus.erledigt);
+    offer('offer-brompton-ben', 'want-brompton', 'user-ben', 120000,
+        'Brompton 2020, frisch serviciert.', days(58), OfferStatus.angenommen);
+    deal('thread-brompton', 'offer-brompton-ben', 'want-brompton', 'user-anna',
+        'user-ben', days(50), 120000, 'Bahnhof Bern, Treffpunkt', days(52), 5);
+    message('msg-brompton-1', 'thread-brompton', 'user-anna',
+        'Danke, das Velo fährt super!', days(51), readAgo: days(50));
+
+    want('want-makita', 'user-cara', 'Makita Akku-Bohrschrauber', 'Werkzeug',
+        '', 15000, 'Gebraucht', zuerich, 30, days(45), 14, WantStatus.erledigt);
+    offer('offer-makita-ben', 'want-makita', 'user-ben', 9000,
+        'Mit zwei Akkus und Koffer.', days(44), OfferStatus.angenommen);
+    deal('thread-makita', 'offer-makita-ben', 'want-makita', 'user-cara',
+        'user-ben', days(40), 8500, 'Zürich HB', days(41), 4);
+
+    want('want-miles', 'user-anna', 'Miles Davis – Kind of Blue', 'Vinyl',
+        'Originalpressung bevorzugt.', 8000, 'Gebraucht (leichtes Knistern ok)',
+        bern, 200, days(35), 7, WantStatus.erledigt);
+    offer('offer-miles-ben', 'want-miles', 'user-ben', 6000,
+        'Nachpressung 1997, Hülle mit Knick.', days(34), OfferStatus.angenommen);
+    deal('thread-miles', 'offer-miles-ben', 'want-miles', 'user-anna',
+        'user-ben', days(30), 6000, 'Versand per Post', null, 3);
   }
 }
 

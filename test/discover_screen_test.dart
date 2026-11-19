@@ -14,17 +14,18 @@ void phoneSize(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
-/// App mit Mock starten, als Luca anmelden und «Entdecken» öffnen.
-/// Luca sieht im Mock: Leica M6 (Mia, heute) und Omega Seamaster 300
-/// (Anna, vor 2 Tagen). Nicht: Eames (pausiert), Pink Floyd (angenommen),
-/// Rennvelo und Makita (eigene).
+/// App mit Mock starten, als Ben anmelden und «Entdecken» öffnen, wie der
+/// Handytest mit supabase/05_testdaten.sql. Ben sieht: Leica Q2 (vor 1 Tag),
+/// Leica M6 (vor 3 Tagen), Eames (vor 4 Tagen), Rolex (vor 5 Tagen).
+/// Nicht: Omega (angenommen), Fujifilm (pausiert), Technics (abgelaufen),
+/// Brompton, Makita, Miles Davis (erledigt).
 Future<void> openDiscover(WidgetTester tester) async {
   phoneSize(tester);
   await tester.pumpWidget(
     RefindApp(repository: MockRefindRepository(delay: Duration.zero)),
   );
   await tester.pumpAndSettle();
-  await tester.enterText(find.byKey(const Key('login-email')), 'luca@refind.test');
+  await tester.enterText(find.byKey(const Key('login-email')), 'ben@refind.test');
   await tester.enterText(find.byKey(const Key('login-password')), 'refind123');
   await tester.tap(find.widgetWithText(FilledButton, 'Anmelden'));
   await tester.pumpAndSettle();
@@ -32,28 +33,54 @@ Future<void> openDiscover(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// Die Liste der Gesuche (nicht die Kategorie-Leiste) zum Scrollen.
+final feedScrollable = find.descendant(
+  of: find.byKey(const Key('feed-list')),
+  matching: find.byType(Scrollable),
+);
+
 void main() {
   testWidgets('TC12: Feed zeigt nur aktive Gesuche anderer, neueste zuerst',
       (tester) async {
     await openDiscover(tester);
 
     expect(find.text('Wer sucht was?'), findsOneWidget);
+    expect(find.text('Leica Q2'), findsOneWidget);
     expect(find.text('Leica M6'), findsOneWidget);
-    expect(find.text('Omega Seamaster 300'), findsOneWidget);
-    expect(find.text('Eames Lounge Chair'), findsNothing);
-    expect(find.textContaining('Pink Floyd'), findsNothing);
-    expect(find.text('Rennvelo Rahmengrösse 56'), findsNothing);
+    // Die Rolex steht zuunterst: hinscrollen
+    await tester.scrollUntilVisible(find.text('Rolex Datejust 36'), 300,
+        scrollable: feedScrollable);
+    expect(find.text('Eames Lounge Chair'), findsOneWidget);
+    for (final hidden in [
+      'Omega Speedmaster',
+      'Fujifilm X100V',
+      'Technics SL-1200',
+      'Brompton M6L',
+      'Makita Akku-Bohrschrauber',
+      'Miles Davis – Kind of Blue',
+    ]) {
+      expect(find.text(hidden), findsNothing, reason: hidden);
+    }
 
     // neueste zuerst
-    final leica = tester.getTopLeft(find.text('Leica M6')).dy;
-    final omega = tester.getTopLeft(find.text('Omega Seamaster 300')).dy;
-    expect(leica, lessThan(omega));
+    final eames = tester.getTopLeft(find.text('Eames Lounge Chair')).dy;
+    final rolex = tester.getTopLeft(find.text('Rolex Datejust 36')).dy;
+    expect(eames, lessThan(rolex));
+  });
 
-    // Name des Käufers, Zeit seit Erfassung, Preisobergrenze
-    expect(find.text('Anna Keller'), findsOneWidget);
-    expect(find.text('VOR 2 TAGEN'), findsOneWidget);
-    expect(find.textContaining("bis CHF 2'500"), findsOneWidget);
-    expect(find.text('Angebot senden'), findsNWidgets(2));
+  testWidgets('UC5 Schritt 1: Name, Zeit, Titel, Beschreibung, Preis',
+      (tester) async {
+    await openDiscover(tester);
+    final q2 = tester.getTopLeft(find.text('Leica Q2')).dy;
+    final m6 = tester.getTopLeft(find.text('Leica M6')).dy;
+    expect(q2, lessThan(m6));
+
+    expect(find.text('Anna'), findsWidgets);
+    expect(find.text('VOR 1 TAG'), findsOneWidget);
+    expect(find.text('VOR 3 TAGEN'), findsOneWidget);
+    expect(find.text('Gehäuse, gerne mit 50 mm Summicron.'), findsOneWidget);
+    expect(find.text("bis CHF 3'800"), findsOneWidget);
+    expect(find.text('Winterthur'), findsOneWidget);
   });
 
   testWidgets('TC12: Kategorie Uhren, dann wieder Alle', (tester) async {
@@ -61,19 +88,20 @@ void main() {
 
     await tester.tap(find.byKey(const Key('feed-chip-Uhren')));
     await tester.pumpAndSettle();
-    expect(find.text('Omega Seamaster 300'), findsOneWidget);
+    expect(find.text('Rolex Datejust 36'), findsOneWidget);
+    expect(find.text('Leica Q2'), findsNothing);
     expect(find.text('Leica M6'), findsNothing);
 
     await tester.tap(find.byKey(const Key('feed-chip-Alle')));
     await tester.pumpAndSettle();
+    expect(find.text('Leica Q2'), findsOneWidget);
     expect(find.text('Leica M6'), findsOneWidget);
-    expect(find.text('Omega Seamaster 300'), findsOneWidget);
   });
 
   testWidgets('UC5 Ausnahme: kein Treffer, Filter zurücksetzen', (tester) async {
     await openDiscover(tester);
 
-    // Werkzeug: nur Lucas eigener Makita-Schrauber, der fehlt im Feed.
+    // Werkzeug: nur Caras Makita-Schrauber, der ist erledigt.
     // Der Chip steht ganz rechts in der Leiste: zuerst hinwischen.
     await tester.ensureVisible(find.byKey(const Key('feed-chip-Werkzeug')));
     await tester.pumpAndSettle();
@@ -83,15 +111,17 @@ void main() {
 
     await tester.tap(find.text('Filter zurücksetzen'));
     await tester.pumpAndSettle();
+    expect(find.text('Leica Q2'), findsOneWidget);
     expect(find.text('Leica M6'), findsOneWidget);
-    expect(find.text('Omega Seamaster 300'), findsOneWidget);
   });
 
   testWidgets('«Angebot senden» öffnet das Sheet zum Gesuch', (tester) async {
     await openDiscover(tester);
-    await tester.tap(find.byKey(const Key('feed-offer-want-5')));
+    await tester.ensureVisible(find.byKey(const Key('feed-offer-want-leica-m6')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Leica M6 · Mia Schmid'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('feed-offer-want-leica-m6')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Leica M6 · Anna'), findsOneWidget);
   });
 
   group('Sheet «Suchen und filtern»', () {
@@ -114,8 +144,10 @@ void main() {
       await tester.enterText(find.byKey(const Key('filter-query')), 'leica');
       await apply(tester);
 
+      expect(find.text('Leica Q2'), findsOneWidget);
       expect(find.text('Leica M6'), findsOneWidget);
-      expect(find.text('Omega Seamaster 300'), findsNothing);
+      expect(find.text('Eames Lounge Chair'), findsNothing);
+      expect(find.text('Rolex Datejust 36'), findsNothing);
       // Suchfeld zeigt den Begriff
       expect(find.text('leica'), findsOneWidget);
 
@@ -127,7 +159,10 @@ void main() {
       await apply(tester);
       expect(find.text('Wer sucht was?'), findsOneWidget);
       expect(find.text('Leica M6'), findsOneWidget);
-      expect(find.text('Omega Seamaster 300'), findsOneWidget);
+      // wieder alle: die Rolex zuunterst ist wieder da
+      await tester.scrollUntilVisible(find.text('Rolex Datejust 36'), 300,
+          scrollable: feedScrollable);
+      expect(find.text('Rolex Datejust 36'), findsOneWidget);
     });
 
     testWidgets('Suchbegriff und Kategorie zusammen, kein Treffer',
