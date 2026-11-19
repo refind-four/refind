@@ -89,4 +89,75 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('Leica M6 · Mia Schmid'), findsOneWidget);
   });
+
+  group('Sheet «Suchen und filtern»', () {
+    Future<void> openSheet(WidgetTester tester) async {
+      await tester.tap(find.byKey(const Key('feed-search')));
+      await tester.pumpAndSettle();
+      expect(find.text('Suchen und filtern'), findsOneWidget);
+    }
+
+    Future<void> apply(WidgetTester tester) async {
+      await tester.ensureVisible(find.byKey(const Key('filter-apply')));
+      await tester.tap(find.byKey(const Key('filter-apply')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('TC13: «leica» zeigt nur die Leica, löschen zeigt wieder alle',
+        (tester) async {
+      await openDiscover(tester);
+      await openSheet(tester);
+      await tester.enterText(find.byKey(const Key('filter-query')), 'leica');
+      await apply(tester);
+
+      expect(find.text('Leica M6'), findsOneWidget);
+      expect(find.text('Omega Seamaster 300'), findsNothing);
+      // Suchfeld zeigt den Begriff
+      expect(find.text('leica'), findsOneWidget);
+
+      // Sheet ist mit dem Begriff vorbelegt, «löschen» leert es
+      await openSheet(tester);
+      expect(find.widgetWithText(TextFormField, 'leica'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('filter-query-clear')));
+      await tester.pump();
+      await apply(tester);
+      expect(find.text('Wer sucht was?'), findsOneWidget);
+      expect(find.text('Leica M6'), findsOneWidget);
+      expect(find.text('Omega Seamaster 300'), findsOneWidget);
+    });
+
+    testWidgets('Suchbegriff und Kategorie zusammen, kein Treffer',
+        (tester) async {
+      await openDiscover(tester);
+      await openSheet(tester);
+      await tester.enterText(find.byKey(const Key('filter-query')), 'Leica');
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Uhren'));
+      await tester.pump();
+      await apply(tester);
+
+      expect(find.text('Kein Gesuch passt zu deiner Suche.'), findsOneWidget);
+      // Kategorie aus dem Sheet ist auch in der Leiste gewählt
+      final chip = tester.widget<ChoiceChip>(find.byKey(const Key('feed-chip-Uhren')));
+      expect(chip.selected, isTrue);
+
+      await tester.tap(find.text('Filter zurücksetzen'));
+      await tester.pumpAndSettle();
+      expect(find.text('Wer sucht was?'), findsOneWidget);
+      expect(find.text('Leica M6'), findsOneWidget);
+    });
+
+    testWidgets('Suchbegriff mit 81 Zeichen wird abgewiesen', (tester) async {
+      await openDiscover(tester);
+      await openSheet(tester);
+      await tester.enterText(find.byKey(const Key('filter-query')), 'a' * 81);
+      await apply(tester);
+
+      expect(
+        find.text('Der Suchbegriff darf höchstens 80 Zeichen lang sein (jetzt 81).'),
+        findsOneWidget,
+      );
+      // Sheet bleibt offen, Feed unverändert
+      expect(find.text('Suchen und filtern'), findsOneWidget);
+    });
+  });
 }

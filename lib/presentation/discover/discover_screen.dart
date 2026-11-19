@@ -86,8 +86,12 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     _load();
   }
 
+  /// UC5 Schritt 3 bis 5: Sheet öffnen, mit den neuen Filtern neu laden.
   Future<void> _openFilterSheet() async {
-    await showFilterSheet(context);
+    final filter = await showFilterSheet(context, _filter);
+    if (filter == null || !mounted) return;
+    _filter = filter;
+    _load();
   }
 
   @override
