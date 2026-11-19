@@ -1,4 +1,4 @@
--- VORSCHLAG (noch nicht mit dem Team abgesprochen): Angebot annehmen (F-12)
+-- Angebot annehmen (F-12), vom Team bestätigt am 19.11.2026
 --
 -- Aufruf aus der App:  supabase.rpc('accept_offer', params: {'p_offer_id': offerId})
 -- Rückgabe: id des Chats (chat_thread) zu diesem Angebot.
