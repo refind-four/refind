@@ -352,5 +352,6 @@ select w.title, p.display_name as besitzer, pl.name as region, w.status,
 from public.want w
 join public.profile p on p.id = w.owner_id
 join public.place pl on pl.id = w.region_id
-where p.display_name in ('Anna', 'Ben', 'Cara')
+join auth.users u on u.id = w.owner_id
+where u.email in ('anna@refind.test', 'ben@refind.test', 'cara@refind.test')
 order by w.created_at desc;
