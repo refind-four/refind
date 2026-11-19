@@ -48,3 +48,22 @@ void checkWantDraft(WantDraft d) {
     _invalid('Unbekannte Laufzeit.');
   }
 }
+
+/// Höchstens so viele Einträge liefert der Feed auf einmal (Mengengerüst,
+/// TC15: Liste mit 100 Einträgen).
+const int maxFeedItems = 100;
+
+/// Prüft die Filter für den Feed (UC5). Ein Suchbegriff, der länger ist
+/// als ein Titel, kann nie passen und wird abgewiesen.
+void checkFeedFilter(FeedFilter f) {
+  if ((f.query?.trim().length ?? 0) > WantLimits.maxTitleLength) {
+    _invalid('Der Suchbegriff ist zu lang.');
+  }
+  if (f.category != null && !kategorien.contains(f.category)) {
+    _invalid('Unbekannte Kategorie.');
+  }
+  final radius = f.radiusKm;
+  if (radius != null && (radius < 1 || radius > WantLimits.maxRadiusKm)) {
+    _invalid('Der Umkreis liegt ausserhalb des erlaubten Bereichs.');
+  }
+}

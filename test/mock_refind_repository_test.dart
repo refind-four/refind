@@ -131,4 +131,56 @@ void main() {
       });
     }
   });
+
+  group('UC5: Feed', () {
+    Future<List<String>> titles([FeedFilter filter = const FeedFilter()]) async {
+      final feed = await repo.getFeed(filter);
+      return [for (final i in feed) i.want.title];
+    }
+
+    setUp(() => repo.signIn('luca@refind.test', 'refind123'));
+
+    test('TC12: nur aktive Gesuche anderer Konten, neueste zuerst', () async {
+      expect(await titles(), [
+        'Leica M6', // Mia, heute
+        'Omega Seamaster 300', // Anna, vor 2 Tagen
+      ]);
+      // nicht dabei: Eames (pausiert), Pink Floyd (Angebot angenommen),
+      // Rennvelo und Makita (eigene Gesuche von Luca)
+    });
+
+    test('TC12: Kategorie Uhren', () async {
+      expect(await titles(const FeedFilter(category: 'Uhren')),
+          ['Omega Seamaster 300']);
+    });
+
+    test('TC13: Suchbegriff nur im Titel, nicht in der Beschreibung', () async {
+      expect(await titles(const FeedFilter(query: 'leica')), ['Leica M6']);
+      // «Box» steht nur in der Beschreibung des Omega-Gesuchs
+      expect(await titles(const FeedFilter(query: 'Box')), isEmpty);
+    });
+
+    test('Suchbegriff zu lang oder unbekannte Kategorie wird abgewiesen', () async {
+      for (final bad in [
+        FeedFilter(query: 'a' * 81),
+        const FeedFilter(category: 'Autos'),
+        const FeedFilter(placeId: 1, radiusKm: 0),
+      ]) {
+        await expectLater(
+          repo.getFeed(bad),
+          throwsA(isA<RepositoryException>().having(
+              (e) => e.kind, 'kind', RepositoryErrorKind.ungueltigeEingabe)),
+        );
+      }
+    });
+
+    test('ohne Anmeldung kein Feed', () async {
+      await repo.signOut();
+      await expectLater(
+        repo.getFeed(const FeedFilter()),
+        throwsA(isA<RepositoryException>().having(
+            (e) => e.kind, 'kind', RepositoryErrorKind.nichtBerechtigt)),
+      );
+    });
+  });
 }

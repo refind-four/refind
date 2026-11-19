@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../application/services/auth_service.dart';
+import '../application/services/feed_service.dart';
 import '../application/services/want_service.dart';
 import '../application/state/session_provider.dart';
 import '../data/refind_repository.dart';
@@ -28,6 +29,7 @@ class RefindApp extends StatelessWidget {
           create: (_) => SessionProvider(AuthService(repository))..restore(),
         ),
         Provider(create: (_) => WantService(repository)),
+        Provider(create: (_) => FeedService(repository)),
       ],
       child: MaterialApp(
         title: 'refind',

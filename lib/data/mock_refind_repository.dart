@@ -356,6 +356,7 @@ class MockRefindRepository implements RefindRepository {
   @override
   Future<List<FeedItem>> getFeed(FeedFilter filter) async {
     await _wait();
+    checkFeedFilter(filter);
     final me = _me;
     final now = DateTime.now();
     final origin = filter.placeId == null ? null : _place(filter.placeId!);
@@ -363,14 +364,13 @@ class MockRefindRepository implements RefindRepository {
 
     final items = <FeedItem>[];
     for (final w in _wants) {
+      // Wie die Funktion get_feed in supabase/09_feed.sql: nur aktive,
+      // nicht abgelaufene Gesuche anderer Konten ohne angenommenes Angebot.
       if (w.ownerId == me || w.status != WantStatus.aktiv) continue;
-      if (w.expiresAt.isBefore(now) || _hasAcceptedOffer(w.id)) continue;
+      if (!w.expiresAt.isAfter(now) || _hasAcceptedOffer(w.id)) continue;
       if (filter.category != null && w.category != filter.category) continue;
-      if (query.isNotEmpty &&
-          !w.title.toLowerCase().contains(query) &&
-          !w.description.toLowerCase().contains(query)) {
-        continue;
-      }
+      // F-07: nur im Titel suchen (Konzept UC5 Schritt 5, TC13).
+      if (query.isNotEmpty && !w.title.toLowerCase().contains(query)) continue;
       final region = _place(w.regionId);
       final distance = origin?.distanceKmTo(region);
       if (distance != null && filter.radiusKm != null && distance > filter.radiusKm!) {
@@ -384,7 +384,7 @@ class MockRefindRepository implements RefindRepository {
       ));
     }
     items.sort((a, b) => b.want.createdAt.compareTo(a.want.createdAt));
-    return items;
+    return items.take(maxFeedItems).toList();
   }
 
   @override

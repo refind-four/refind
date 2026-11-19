@@ -164,10 +164,7 @@ class SupabaseRefindRepository implements RefindRepository {
             .order('plz')
             .limit(20);
       } else {
-        // % und _ sind in ilike Platzhalter. Aus der Eingabe gelten sie
-        // als normale Zeichen.
-        final escaped = q.replaceAllMapped(RegExp(r'[\\%_]'), (m) => '\\${m[0]}');
-        rows = await base.ilike('name', '%$escaped%').order('name').limit(20);
+        rows = await base.ilike('name', containsPattern(q)).order('name').limit(20);
       }
       return rows.map(placeFromRow).toList();
     });
@@ -255,12 +252,36 @@ class SupabaseRefindRepository implements RefindRepository {
       throw UnimplementedError('republishWant folgt mit UC4.');
 
   // ---------------------------------------------------------------------
-  // Entdecken, Angebote, Chat, Bewertung (UC5 bis UC9): folgen später
+  // Entdecken (UC5)
   // ---------------------------------------------------------------------
 
+  /// Welche Gesuche sichtbar sind, entscheidet die Funktion get_feed in der
+  /// Datenbank (supabase/09_feed.sql). Nur sie darf prüfen, ob es zu einem
+  /// fremden Gesuch ein angenommenes Angebot gibt. Kategorie und Suchbegriff
+  /// filtert ebenfalls die Datenbank, damit nur passende Zeilen über das
+  /// Netz kommen. Den Umkreis rechnet die App (FilterLogic im FeedService).
   @override
-  Future<List<FeedItem>> getFeed(FeedFilter filter) =>
-      throw UnimplementedError('getFeed folgt mit UC5.');
+  Future<List<FeedItem>> getFeed(FeedFilter filter) async {
+    checkFeedFilter(filter);
+    return _guard(() async {
+      _me;
+      // Filter zuerst, dann select: so verlangt es das Paket postgrest.
+      var query = _client.rpc('get_feed');
+      final category = filter.category;
+      if (category != null) query = query.eq('category', category);
+      final q = (filter.query ?? '').trim().replaceAll(RegExp(r'\s+'), ' ');
+      if (q.isNotEmpty) query = query.ilike('title', containsPattern(q));
+      final rows = await query
+          .select('*, region:place(*), owner:profile(display_name)')
+          .order('created_at', ascending: false)
+          .limit(maxFeedItems);
+      return rows.map(feedItemFromRow).toList();
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Angebote, Chat, Bewertung (UC6 bis UC9): folgen später
+  // ---------------------------------------------------------------------
 
   @override
   Future<Offer> createOffer(
@@ -369,6 +390,21 @@ Want wantFromRow(Map<String, dynamic> row, {DateTime? now}) {
 // -----------------------------------------------------------------------
 // Fehler übersetzen
 // -----------------------------------------------------------------------
+
+/// Zeile aus get_feed mit eingebetteter Region und Name des Käufers.
+FeedItem feedItemFromRow(Map<String, dynamic> row) {
+  final owner = row['owner'] as Map<String, dynamic>?;
+  return FeedItem(
+    want: wantFromRow(row),
+    buyerName: (owner?['display_name'] as String?) ?? 'Unbekannt',
+    region: placeFromRow(row['region'] as Map<String, dynamic>),
+  );
+}
+
+/// Muster für ilike «enthält». % und _ sind in ilike Platzhalter, aus der
+/// Eingabe gelten sie als normale Zeichen: «100%» → «%100\%%».
+String containsPattern(String text) =>
+    '%${text.replaceAllMapped(RegExp(r'[\\%_]'), (m) => '\\${m[0]}')}%';
 
 bool _isRateLimit(AuthException e) =>
     e.statusCode == '429' ||

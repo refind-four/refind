@@ -70,6 +70,27 @@ void main() {
           wantFromRow(wantRow(status: 'pausiert'), now: DateTime.utc(2026, 12));
       expect(want.status, WantStatus.pausiert);
     });
+
+    test('Zeile aus get_feed mit Region und Name des Käufers', () {
+      final item = feedItemFromRow({
+        ...wantRow(),
+        'region': {'id': 3, 'plz': 3000, 'name': 'Bern', 'e': 2600670, 'n': 1199655},
+        'owner': {'display_name': 'Anna'},
+      });
+      expect(item.buyerName, 'Anna');
+      expect(item.region.name, 'Bern');
+      expect(item.want.title, 'Omega Seamaster');
+    });
+  });
+
+  group('Suchmuster für ilike', () {
+    test('enthält', () => expect(containsPattern('Leica'), '%Leica%'));
+
+    test('% und _ aus der Eingabe gelten nicht als Platzhalter', () {
+      expect(containsPattern('100%'), r'%100\%%');
+      expect(containsPattern('a_b'), r'%a\_b%');
+      expect(containsPattern(r'a\b'), r'%a\\b%');
+    });
   });
 
   group('Fehler von Supabase → RepositoryException', () {
