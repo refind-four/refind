@@ -21,6 +21,12 @@ class AuthService {
 
   Future<void> signOut() => _repository.signOut();
 
+  /// UC2, TC06: Konto mit allen Daten löschen. Danach ist niemand angemeldet.
+  Future<void> deleteAccount() => _repository.deleteAccount();
+
+  /// Ergebnis des Bestätigungslinks aus der Mail (Deep Link, UC1 Schritt 5).
+  Stream<bool> get confirmationLinkResults => _repository.confirmationLinkResults;
+
   /// Liefert das Profil, wenn noch eine gültige Sitzung besteht, sonst null.
   /// UC1 Schritt 1: mit gültiger Sitzung direkt «Meine Gesuche».
   Future<User?> restoreSession() async {

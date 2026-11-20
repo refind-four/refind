@@ -185,6 +185,26 @@ class MockRefindRepository implements RefindRepository {
     _credentials[email.trim().toLowerCase()]?.confirmed = true;
   }
 
+  final _linkResults = StreamController<bool>.broadcast();
+
+  @override
+  Stream<bool> get confirmationLinkResults => _linkResults.stream;
+
+  /// Für Tests: Die Person tippt auf den Bestätigungslink in der Mail.
+  /// Gültig: Konto bestätigt und angemeldet (wie supabase_flutter mit dem
+  /// Deep Link). Ungültig (abgelaufen): nur die Meldung, keine Anmeldung.
+  Future<void> openConfirmationLink(String email, {bool valid = true}) async {
+    await _wait();
+    final cred = _credentials[email.trim().toLowerCase()];
+    if (!valid || cred == null) {
+      _linkResults.add(false);
+      return;
+    }
+    cred.confirmed = true;
+    _currentUserId = cred.userId;
+    _linkResults.add(true);
+  }
+
   @override
   Future<void> registerPushToken(String token) async {
     await _wait();
@@ -227,15 +247,31 @@ class MockRefindRepository implements RefindRepository {
   }
 
   @override
+  /// Wie delete_own_account in supabase/15_konto_loeschen.sql: Chats (mit
+  /// Nachrichten und Bewertungen), Bewertungen von und für das Konto,
+  /// eigene Angebote und Angebote zu eigenen Gesuchen, Gesuche, Pushtoken,
+  /// Profil und Zugang.
+  @override
   Future<void> deleteAccount() async {
     await _wait();
     final id = _me;
-    final myWantIds = _wants.where((w) => w.ownerId == id).map((w) => w.id).toSet();
-    _wants.removeWhere((w) => w.ownerId == id);
+    final chatIds = {
+      for (final t in _threads)
+        if (t.buyerId == id || t.sellerId == id) t.id,
+    };
+    final myWantIds = {
+      for (final w in _wants)
+        if (w.ownerId == id) w.id,
+    };
+    _ratings.removeWhere((r) =>
+        r.fromUserId == id || r.toUserId == id || chatIds.contains(r.threadId));
+    _messages.removeWhere((m) => chatIds.contains(m.threadId) || m.senderId == id);
+    _threads.removeWhere((t) => chatIds.contains(t.id));
     _offers.removeWhere((o) => o.sellerId == id || myWantIds.contains(o.wantId));
+    _wants.removeWhere((w) => w.ownerId == id);
+    _pushTokens.remove(id);
     _users.remove(id);
     _credentials.removeWhere((_, c) => c.userId == id);
-    _pushTokens.remove(id);
     _currentUserId = null;
   }
 

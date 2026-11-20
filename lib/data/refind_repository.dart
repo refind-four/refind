@@ -22,6 +22,12 @@ abstract interface class RefindRepository {
   /// Ergänzung zu Konzept 4.3.2. Verrät nicht, ob es das Konto gibt.
   Future<void> resendConfirmation(String email);
 
+  /// Ergebnis des Bestätigungslinks aus der Mail (UC1 Schritt 5, TC01).
+  /// Der Link öffnet die App (Deep Link) und meldet an, ohne signIn.
+  /// true: angemeldet. false: Link ungültig oder abgelaufen.
+  /// Ergänzung zu Konzept 4.3.2.
+  Stream<bool> get confirmationLinkResults;
+
   /// Pushtoken des Geräts speichern.
   Future<void> registerPushToken(String token);
 

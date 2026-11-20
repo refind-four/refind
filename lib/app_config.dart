@@ -37,6 +37,11 @@ class SupabaseConfig {
   /// Privater Bucket für Fotos im Chat (UC8, F-13). Vorbereitet in
   /// 13_speicher.sql, die App benutzt ihn erst mit dem Chat.
   static const String chatPhotoBucket = 'chat-photos';
+
+  /// Deep Link für den Bestätigungslink in der Mail (UC1 Schritt 5, TC01).
+  /// Gleich wie der intent-filter in android/app/src/main/AndroidManifest.xml
+  /// und in Supabase unter Authentication → URL Configuration eingetragen.
+  static const String authRedirectUrl = 'ch.refind.app://login-callback';
 }
 
 /// Bereitet das Backend vor. Wird in main() vor runApp aufgerufen.
@@ -60,6 +65,7 @@ RefindRepository createRepository() {
         Supabase.instance.client,
         photoBucket: SupabaseConfig.offerPhotoBucket,
         chatPhotoBucket: SupabaseConfig.chatPhotoBucket,
+        authRedirectUrl: SupabaseConfig.authRedirectUrl,
       );
   }
 }

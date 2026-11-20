@@ -20,7 +20,12 @@ import 'repository_exception.dart';
 /// UC6 (Angebot senden) und UC7 (Angebote ansehen und annehmen).
 /// Die übrigen Methoden folgen mit ihren Use Cases.
 class SupabaseRefindRepository implements RefindRepository {
-  SupabaseRefindRepository(this._client, {this.photoBucket, this.chatPhotoBucket});
+  SupabaseRefindRepository(
+    this._client, {
+    this.photoBucket,
+    this.chatPhotoBucket,
+    this.authRedirectUrl,
+  });
 
   final SupabaseClient _client;
 
@@ -37,6 +42,12 @@ class SupabaseRefindRepository implements RefindRepository {
   /// bei jeder neuen Nachricht alle Fotos neu signieren muss. Die Links
   /// gelten eine Stunde.
   final Map<String, String> _chatPhotoUrls = {};
+
+  /// Adresse, auf die der Bestätigungslink in der Mail führt (Deep Link,
+  /// z.B. ch.refind.app://login-callback). Muss in Supabase unter
+  /// Authentication → URL Configuration als Redirect URL stehen. Ohne
+  /// Wert nimmt Supabase die Site URL.
+  final String? authRedirectUrl;
 
   // ---------------------------------------------------------------------
   // Hilfsfunktionen
@@ -79,6 +90,8 @@ class SupabaseRefindRepository implements RefindRepository {
         email: mail,
         password: password,
         data: {'display_name': name},
+        // Der Link in der Mail öffnet die App (Deep Link) statt localhost
+        emailRedirectTo: authRedirectUrl,
       );
       // Ist die Mailbestätigung im Projekt ausgeschaltet, meldet Supabase
       // sofort an. Die App erwartet aber wie beim Mock, dass man sich danach
@@ -109,6 +122,7 @@ class SupabaseRefindRepository implements RefindRepository {
         await _client.auth.resend(
           type: OtpType.signup,
           email: email.trim().toLowerCase(),
+          emailRedirectTo: authRedirectUrl,
         );
       } on AuthRetryableFetchException {
         rethrow;
@@ -117,6 +131,22 @@ class SupabaseRefindRepository implements RefindRepository {
       }
     });
   }
+
+  /// UC1 Schritt 5: supabase_flutter verarbeitet den Deep Link selbst
+  /// (getSessionFromUrl) und meldet das Ergebnis über onAuthStateChange:
+  /// signedIn bei Erfolg, ein Fehler bei ungültigem oder abgelaufenem Link.
+  /// signedIn kommt auch nach signIn in der App, der SessionProvider ist
+  /// dann schon angemeldet und ignoriert es.
+  @override
+  Stream<bool> get confirmationLinkResults => _client.auth.onAuthStateChange
+      .where((state) => state.event == AuthChangeEvent.signedIn)
+      .map((_) => true)
+      .transform(StreamTransformer<bool, bool>.fromHandlers(
+        handleError: (error, stack, sink) {
+          if (kDebugMode) debugPrint('Bestätigungslink: $error');
+          sink.add(false);
+        },
+      ));
 
   @override
   Future<void> registerPushToken(String token) {
@@ -157,9 +187,38 @@ class SupabaseRefindRepository implements RefindRepository {
   ) =>
       throw UnimplementedError('updateProfile folgt mit UC2.');
 
+  /// UC2, TC06, N-05: Konto mit allen Daten löschen (15_konto_loeschen.sql).
+  ///
+  /// 1. Pfade der eigenen Fotos holen (account_photo_paths).
+  /// 2. Diese Dateien über die Storage-API löschen. Die Regeln erlauben nur
+  ///    den eigenen Ordner, fremde Fotos bleiben (ABWEICHUNGEN 13.4).
+  /// 3. delete_own_account löscht alle Zeilen und das Anmeldekonto.
+  /// 4. Lokal abmelden: Das Konto gibt es nicht mehr, ein Abmelden beim
+  ///    Server würde scheitern.
+  /// Scheitert Schritt 2 oder 3, bleibt das Konto bestehen und die Person
+  /// kann es nochmals versuchen.
   @override
-  Future<void> deleteAccount() =>
-      throw UnimplementedError('deleteAccount folgt mit UC2.');
+  Future<void> deleteAccount() {
+    return _guard(() async {
+      _me;
+      final rows = await _client.rpc('account_photo_paths') as List;
+      final paths = <String, List<String>>{};
+      for (final r in rows.cast<Map<String, dynamic>>()) {
+        paths.putIfAbsent(r['bucket'] as String, () => []).add(r['path'] as String);
+      }
+      for (final MapEntry(key: bucket, value: list) in paths.entries) {
+        // In Portionen, damit eine Anfrage nicht zu gross wird
+        for (var i = 0; i < list.length; i += 100) {
+          await _client.storage
+              .from(bucket)
+              .remove(list.sublist(i, i + 100 > list.length ? list.length : i + 100));
+        }
+      }
+      await _client.rpc('delete_own_account');
+      _chatPhotoUrls.clear();
+      await _client.auth.signOut(scope: SignOutScope.local);
+    });
+  }
 
   /// Sucht nach Postleitzahl (nur Ziffern) oder nach Ortsname.
   @override

@@ -143,6 +143,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 48),
                         Text('Melde dich an.', style: textTheme.headlineLarge),
+                        // Bestätigungslink aus der Mail hat nicht geklappt
+                        if (context.watch<SessionProvider>().linkNotice
+                            case final notice?) ...[
+                          const SizedBox(height: 16),
+                          Text(notice,
+                              key: const Key('login-link-notice'),
+                              style: const TextStyle(color: RefindColors.accent)),
+                        ],
                         const SizedBox(height: 32),
                         LabeledField(
                           label: 'Mailadresse',
