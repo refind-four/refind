@@ -33,3 +33,24 @@ String formatRemaining(Duration remaining) {
   if (remaining.inMinutes >= 1) return '${remaining.inMinutes} Min';
   return '< 1 Min';
 }
+
+const _weekdays = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+
+/// Zeit in der Chatliste (Abbildung 10: «12:04», «Mo»):
+///
+/// * heute: Uhrzeit «12:04»
+/// * gestern: «gestern»
+/// * in den letzten 6 Tagen: Wochentag «Mo»
+/// * älter: Datum «19.11.»
+String formatChatTime(DateTime time, DateTime now) {
+  // Kalendertage in UTC zählen: Bei der Zeitumstellung hat ein Tag sonst
+  // 23 oder 25 Stunden, und «gestern» wäre falsch.
+  final day = DateTime.utc(time.year, time.month, time.day);
+  final today = DateTime.utc(now.year, now.month, now.day);
+  final daysAgo = today.difference(day).inDays;
+  String two(int n) => n.toString().padLeft(2, '0');
+  if (daysAgo <= 0) return '${two(time.hour)}:${two(time.minute)}';
+  if (daysAgo == 1) return 'gestern';
+  if (daysAgo < 7) return _weekdays[time.weekday - 1];
+  return '${two(time.day)}.${two(time.month)}.';
+}

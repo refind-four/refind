@@ -36,3 +36,9 @@ const String acceptConflictMessage =
 /// denselben Text.
 const String wantStatusConflictMessage =
     'Das geht bei diesem Gesuch gerade nicht. Bitte lade es neu.';
+
+/// Meldung, wenn ein Deal nicht abgeschlossen werden kann (UC8 Schritt 7):
+/// schon abgeschlossen oder das Gesuch ist nicht mehr aktiv. Mock und
+/// Supabase zeigen denselben Text.
+const String dealConflictMessage =
+    'Der Deal lässt sich nicht mehr abschliessen. Bitte lade den Chat neu.';

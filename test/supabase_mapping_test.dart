@@ -236,4 +236,61 @@ void main() {
       expect(mapSupabaseError(error), same(error));
     });
   });
+
+  group('Chat (UC8)', () {
+    Map<String, dynamic> messageRow({String kind = 'text', String body = 'Hallo'}) => {
+          'id': 'm1',
+          'thread_id': 't1',
+          'sender_id': 'ben',
+          'kind': kind,
+          'body': body,
+          'created_at': '2026-11-20T10:00:00+00:00',
+          'read_at': null,
+        };
+
+    Map<String, dynamic> threadRow({List<Map<String, dynamic>> messages = const []}) => {
+          'id': 't1',
+          'offer_id': 'o1',
+          'want_id': 'w1',
+          'buyer_id': 'anna',
+          'seller_id': 'ben',
+          'last_activity': '2026-11-20T10:00:00+00:00',
+          'handover_at': null,
+          'handover_place': null,
+          'agreed_price': null,
+          'closed_at': null,
+          'want': {'title': 'Omega Speedmaster'},
+          'offer': {'price': 590000},
+          'buyer': {'display_name': 'Anna'},
+          'seller': {'display_name': 'Ben'},
+          'message': messages,
+        };
+
+    test('Nachricht: Text und Foto', () {
+      final m = messageFromRow(messageRow());
+      expect(m.kind, MessageKind.text);
+      expect(m.body, 'Hallo');
+      expect(m.readAt, isNull);
+      expect(messageFromRow(messageRow(kind: 'foto', body: 't1/ben/1.jpg')).kind,
+          MessageKind.foto);
+    });
+
+    test('Gegenüber hängt davon ab, wer fragt', () {
+      expect(chatSummaryFromRow(threadRow(), 'anna').otherUserName, 'Ben');
+      expect(chatSummaryFromRow(threadRow(), 'ben').otherUserName, 'Anna');
+    });
+
+    test('Titel, Preis, letzte Nachricht; ungelesen noch 0 (F-14 offen)', () {
+      final c = chatSummaryFromRow(threadRow(messages: [messageRow()]), 'anna');
+      expect(c.wantTitle, 'Omega Speedmaster');
+      expect(c.offerPriceRappen, 590000);
+      expect(c.lastMessage?.body, 'Hallo');
+      expect(c.unreadCount, 0);
+      expect(c.thread.isClosed, isFalse);
+    });
+
+    test('Chat ohne Nachricht', () {
+      expect(chatSummaryFromRow(threadRow(), 'anna').lastMessage, isNull);
+    });
+  });
 }

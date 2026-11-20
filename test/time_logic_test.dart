@@ -62,4 +62,40 @@ void main() {
       expect(formatRemaining(const Duration(minutes: -5)), '< 1 Min');
     });
   });
+
+  group('Zeit in der Chatliste', () {
+    final now = DateTime(2026, 11, 20, 15, 30); // Freitag
+
+    test('heute: Uhrzeit', () {
+      expect(formatChatTime(DateTime(2026, 11, 20, 12, 4), now), '12:04');
+      expect(formatChatTime(DateTime(2026, 11, 20, 0, 0), now), '00:00');
+    });
+
+    test('gestern, auch kurz vor Mitternacht', () {
+      expect(formatChatTime(DateTime(2026, 11, 19, 23, 59), now), 'gestern');
+      expect(formatChatTime(DateTime(2026, 11, 19, 0, 1), now), 'gestern');
+    });
+
+    test('letzte 6 Tage: Wochentag', () {
+      expect(formatChatTime(DateTime(2026, 11, 18, 9), now), 'Mi');
+      expect(formatChatTime(DateTime(2026, 11, 16, 9), now), 'Mo');
+      expect(formatChatTime(DateTime(2026, 11, 14, 9), now), 'Sa');
+    });
+
+    test('älter: Datum', () {
+      expect(formatChatTime(DateTime(2026, 11, 13, 9), now), '13.11.');
+      expect(formatChatTime(DateTime(2026, 1, 2, 9), now), '02.01.');
+    });
+
+    test('Uhr des Handys geht nach: Zeit in der Zukunft gilt als heute', () {
+      expect(formatChatTime(DateTime(2026, 11, 21, 8, 0), now), '08:00');
+    });
+  });
+
+  test('Zeitumstellung (29.03.2026): Sonntag 23 Stunden lang', () {
+    // Ohne UTC-Kalendertage wäre Samstag 23:00 hier «heute» oder falsch.
+    final montag = DateTime(2026, 3, 30, 0, 30);
+    expect(formatChatTime(DateTime(2026, 3, 29, 1, 0), montag), 'gestern');
+    expect(formatChatTime(DateTime(2026, 3, 28, 23, 0), montag), 'Sa');
+  });
 }

@@ -59,6 +59,7 @@ RefindRepository createRepository() {
       return SupabaseRefindRepository(
         Supabase.instance.client,
         photoBucket: SupabaseConfig.offerPhotoBucket,
+        chatPhotoBucket: SupabaseConfig.chatPhotoBucket,
       );
   }
 }

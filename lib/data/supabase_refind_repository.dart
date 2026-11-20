@@ -20,7 +20,7 @@ import 'repository_exception.dart';
 /// UC6 (Angebot senden) und UC7 (Angebote ansehen und annehmen).
 /// Die übrigen Methoden folgen mit ihren Use Cases.
 class SupabaseRefindRepository implements RefindRepository {
-  SupabaseRefindRepository(this._client, {this.photoBucket});
+  SupabaseRefindRepository(this._client, {this.photoBucket, this.chatPhotoBucket});
 
   final SupabaseClient _client;
 
@@ -28,6 +28,15 @@ class SupabaseRefindRepository implements RefindRepository {
   /// Solange er leer ist (Dateiablage noch nicht eingerichtet), speichert
   /// [createOffer] das Angebot ohne Fotos. Siehe ABWEICHUNGEN.md.
   final String? photoBucket;
+
+  /// Name des Buckets für Fotos im Chat (13_speicher.sql). Ohne Bucket
+  /// lehnt [sendPhoto] ab.
+  final String? chatPhotoBucket;
+
+  /// Signierte Links der Chatfotos (Pfad → Link), damit die Echtzeit nicht
+  /// bei jeder neuen Nachricht alle Fotos neu signieren muss. Die Links
+  /// gelten eine Stunde.
+  final Map<String, String> _chatPhotoUrls = {};
 
   // ---------------------------------------------------------------------
   // Hilfsfunktionen
@@ -501,21 +510,134 @@ class SupabaseRefindRepository implements RefindRepository {
     });
   }
 
-  @override
-  Future<List<ChatSummary>> getChats() =>
-      throw UnimplementedError('getChats folgt mit UC8.');
+  // ---------------------------------------------------------------------
+  // Chat (UC8)
+  // ---------------------------------------------------------------------
 
+  /// UC8 Schritt 1: eigene Chats, zuletzt aktive zuerst. Ein Aufruf mit
+  /// Gesuchstitel, Angebotspreis, beiden Namen und nur der letzten
+  /// Nachricht. Die RLS-Regel chat_thread_select liefert nur Chats, in
+  /// denen man Käufer oder Verkäufer ist.
   @override
-  Stream<List<Message>> watchMessages(String threadId) =>
-      throw UnimplementedError('watchMessages folgt mit UC8.');
+  Future<List<ChatSummary>> getChats() {
+    return _guard(() async {
+      final me = _me;
+      final rows = await _client
+          .from('chat_thread')
+          .select('*, want(title), offer(price), '
+              'buyer:profile!chat_thread_buyer_id_fkey(display_name), '
+              'seller:profile!chat_thread_seller_id_fkey(display_name), '
+              'message(*)')
+          .order('last_activity', ascending: false)
+          .order('created_at', referencedTable: 'message', ascending: false)
+          .limit(1, referencedTable: 'message');
+      return rows.map((row) => chatSummaryFromRow(row, me)).toList();
+    });
+  }
 
+  /// UC8 Schritt 3: Nachrichten in Echtzeit (Konzept S4). Der Stream lädt
+  /// zuerst alle Nachrichten und liefert danach bei jeder neuen Nachricht
+  /// die ganze Liste neu, älteste zuerst. Supabase Realtime wendet dabei die
+  /// RLS-Regel message_select an: ein fremder Chat liefert nichts (TC27).
+  /// Voraussetzung: message ist in der Publication (14_chat.sql).
   @override
-  Future<Message> sendText(String threadId, String text) =>
-      throw UnimplementedError('sendText folgt mit UC8.');
+  Stream<List<Message>> watchMessages(String threadId) {
+    if (_client.auth.currentUser == null) {
+      return Stream.error(const RepositoryException(
+          RepositoryErrorKind.nichtBerechtigt, 'Bitte zuerst anmelden.'));
+    }
+    return _client
+        .from('message')
+        .stream(primaryKey: ['id'])
+        .eq('thread_id', threadId)
+        .order('created_at', ascending: true)
+        .asyncMap((rows) => _withChatPhotoUrls(rows.map(messageFromRow).toList()))
+        .handleError((Object e, StackTrace stack) =>
+            Error.throwWithStackTrace(mapSupabaseError(e), stack));
+  }
 
+  /// Ersetzt bei Fotonachrichten den Pfad durch einen Link (eine Stunde
+  /// gültig). Nur Mitglieder des Chats bekommen einen Link (Storage-Regel
+  /// chat_photos_select). Klappt es nicht, bleibt der Pfad (Symbol).
+  Future<List<Message>> _withChatPhotoUrls(List<Message> messages) async {
+    final bucket = chatPhotoBucket;
+    if (bucket == null) return messages;
+    final missing = {
+      for (final m in messages)
+        if (m.kind == MessageKind.foto && !_chatPhotoUrls.containsKey(m.body)) m.body,
+    }.toList();
+    if (missing.isNotEmpty) {
+      try {
+        final results =
+            await _client.storage.from(bucket).createSignedUrlsResult(missing, 3600);
+        _chatPhotoUrls.addAll(signedUrlsByPath(results));
+      } on StorageException catch (e) {
+        if (kDebugMode) debugPrint('Chatfotos ohne Link: $e');
+      }
+    }
+    return [
+      for (final m in messages)
+        m.kind == MessageKind.foto && _chatPhotoUrls.containsKey(m.body)
+            ? Message(
+                id: m.id,
+                threadId: m.threadId,
+                senderId: m.senderId,
+                kind: m.kind,
+                body: _chatPhotoUrls[m.body]!,
+                createdAt: m.createdAt,
+                readAt: m.readAt,
+              )
+            : m,
+    ];
+  }
+
+  /// UC8 Schritt 3: Textnachricht speichern. RLS message_insert prüft
+  /// Absender und Mitgliedschaft, die CHECK-Regel die Länge (14_chat.sql).
   @override
-  Future<Message> sendPhoto(String threadId, File photo) =>
-      throw UnimplementedError('sendPhoto folgt mit UC8.');
+  Future<Message> sendText(String threadId, String text) async {
+    checkMessageText(text);
+    return _guard(() async {
+      final row = await _client
+          .from('message')
+          .insert({
+            'thread_id': threadId,
+            'sender_id': _me,
+            'kind': 'text',
+            'body': text.trim(),
+          })
+          .select()
+          .single();
+      return messageFromRow(row);
+    });
+  }
+
+  /// UC8 Schritt 3: Foto senden. Zuerst in den privaten Bucket chat-photos
+  /// unter `<thread_id>/<uid>/<zeit>.<typ>` (Storage-Regel chat_photos_insert:
+  /// nur Mitglieder, nur der eigene Ordner), dann eine Nachricht vom Typ
+  /// «foto» mit diesem Pfad (CHECK message_body_check prüft den Ordner).
+  @override
+  Future<Message> sendPhoto(String threadId, File photo) async {
+    checkOfferPhotoSizes(fileSizes([photo]));
+    final bucket = chatPhotoBucket;
+    if (bucket == null) {
+      throw const RepositoryException(
+          RepositoryErrorKind.konflikt, 'Fotos im Chat sind noch nicht eingerichtet.');
+    }
+    return _guard(() async {
+      final me = _me;
+      final (ext, mime) = photoFileType(photo.path);
+      final path = '$threadId/$me/${DateTime.now().millisecondsSinceEpoch}.$ext';
+      await _client.storage
+          .from(bucket)
+          .upload(path, photo, fileOptions: FileOptions(contentType: mime));
+      final row = await _client
+          .from('message')
+          .insert({'thread_id': threadId, 'sender_id': me, 'kind': 'foto', 'body': path})
+          .select()
+          .single();
+      return (await _withChatPhotoUrls([messageFromRow(row)])).single;
+    });
+  }
 
   @override
   Future<void> markRead(String threadId) =>
@@ -525,9 +647,34 @@ class SupabaseRefindRepository implements RefindRepository {
   Future<void> setHandover(String threadId, DateTime at, String place) =>
       throw UnimplementedError('setHandover folgt mit UC8.');
 
+  /// UC8 Schritt 7: Deal abschliessen über die Datenbank-Funktion
+  /// close_deal (supabase/14_chat.sql). Sie prüft Käufer, offenen Chat,
+  /// Preis und aktives Gesuch und setzt das Gesuch auf «erledigt».
   @override
-  Future<void> closeDeal(String threadId, int agreedPriceRappen) =>
-      throw UnimplementedError('closeDeal folgt mit UC9.');
+  Future<void> closeDeal(String threadId, int agreedPriceRappen) async {
+    checkDealPrice(agreedPriceRappen);
+    await _guard(() async {
+      try {
+        await _client.rpc('close_deal',
+            params: {'p_thread_id': threadId, 'p_agreed_price': agreedPriceRappen});
+      } on PostgrestException catch (e) {
+        // Eigene Meldungen statt der zu «Angebot annehmen» (gleiche Codes)
+        if (e.code == 'P0001') {
+          throw const RepositoryException(
+              RepositoryErrorKind.konflikt, dealConflictMessage);
+        }
+        if (e.code == 'P0002') {
+          throw const RepositoryException(
+              RepositoryErrorKind.ungueltigeEingabe, 'Chat nicht gefunden.');
+        }
+        if (e.code == '42501') {
+          throw const RepositoryException(
+              RepositoryErrorKind.nichtBerechtigt, 'Nur der Käufer kann abschliessen.');
+        }
+        rethrow;
+      }
+    });
+  }
 
   @override
   Future<void> rateUser(String threadId, int stars) =>
@@ -786,3 +933,34 @@ Map<String, String> signedUrlsByPath(List<SignedUrlResult> results) => {
       for (final r in results)
         if (r is SignedUrlSuccess) r.path: r.signedUrl,
     };
+
+/// Zeile aus message.
+Message messageFromRow(Map<String, dynamic> row) => Message(
+      id: row['id'] as String,
+      threadId: row['thread_id'] as String,
+      senderId: row['sender_id'] as String,
+      kind: MessageKind.values.byName(row['kind'] as String),
+      body: row['body'] as String,
+      createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
+      readAt: row['read_at'] == null
+          ? null
+          : DateTime.parse(row['read_at'] as String).toLocal(),
+    );
+
+/// Zeile aus chat_thread mit Gesuch, Angebot, beiden Namen und der letzten
+/// Nachricht (getChats). [me] bestimmt, wer das Gegenüber ist.
+ChatSummary chatSummaryFromRow(Map<String, dynamic> row, String me) {
+  final thread = chatThreadFromRow(row);
+  final buyer = row['buyer'] as Map<String, dynamic>?;
+  final seller = row['seller'] as Map<String, dynamic>?;
+  final other = thread.buyerId == me ? seller : buyer;
+  final messages = (row['message'] as List? ?? const []).cast<Map<String, dynamic>>();
+  return ChatSummary(
+    thread: thread,
+    otherUserName: (other?['display_name'] as String?) ?? 'Unbekannt',
+    wantTitle: ((row['want'] as Map<String, dynamic>?)?['title'] as String?) ?? '',
+    unreadCount: 0, // braucht «gelesen» (F-14), noch offen
+    lastMessage: messages.isEmpty ? null : messageFromRow(messages.first),
+    offerPriceRappen: (row['offer'] as Map<String, dynamic>?)?['price'] as int?,
+  );
+}

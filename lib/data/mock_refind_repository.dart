@@ -551,6 +551,8 @@ class MockRefindRepository implements RefindRepository {
               .where((m) => m.senderId != me && m.readAt == null)
               .length,
           lastMessage: _messagesOf(t.id).lastOrNull,
+          offerPriceRappen:
+              _offers.where((o) => o.id == t.offerId).firstOrNull?.priceRappen,
         ),
     ];
   }
@@ -584,13 +586,15 @@ class MockRefindRepository implements RefindRepository {
   @override
   Future<Message> sendText(String threadId, String text) async {
     await _wait();
-    if (text.trim().isEmpty) _invalid('Die Nachricht ist leer.');
+    checkMessageText(text); // gemeinsam mit Supabase (input_checks.dart)
     return _addMessage(threadId, MessageKind.text, text.trim());
   }
 
   @override
   Future<Message> sendPhoto(String threadId, File photo) async {
     await _wait();
+    // Wie Supabase: höchstens 5 MB (input_checks.dart, Bucket chat-photos)
+    checkOfferPhotoSizes(fileSizes([photo]));
     return _addMessage(threadId, MessageKind.foto, photo.path);
   }
 
@@ -624,10 +628,13 @@ class MockRefindRepository implements RefindRepository {
   @override
   Future<void> closeDeal(String threadId, int agreedPriceRappen) async {
     await _wait();
+    // Wie close_deal in supabase/14_chat.sql
+    checkDealPrice(agreedPriceRappen);
     final thread = _myThread(threadId);
     if (thread.buyerId != _me) _forbidden('Nur der Käufer kann abschliessen.');
-    if (thread.isClosed) _conflict('Das Geschäft ist bereits abgeschlossen.');
-    if (agreedPriceRappen <= 0) _invalid('Der Preis muss grösser als 0 sein.');
+    if (thread.isClosed || _want(thread.wantId).status != WantStatus.aktiv) {
+      _conflict(dealConflictMessage);
+    }
     final now = DateTime.now();
     _replaceThread(thread.copyWith(
       agreedPriceRappen: agreedPriceRappen,

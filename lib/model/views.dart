@@ -89,13 +89,21 @@ class ChatSummary {
     required this.wantTitle,
     required this.unreadCount,
     this.lastMessage,
+    this.offerPriceRappen,
   });
 
   final ChatThread thread;
   final String otherUserName;
   final String wantTitle;
+
+  /// Ungelesene Nachrichten. Braucht «gelesen» (F-14, mark_read), das noch
+  /// fehlt. Die App zeigt den Wert darum noch nicht an.
   final int unreadCount;
   final Message? lastMessage;
+
+  /// Preis des angenommenen Angebots, wie in der Chatliste und der
+  /// Kopfzeile des Chats (Abbildung 10: «OMEGA SEAMASTER · CHF 1'720»).
+  final int? offerPriceRappen;
 }
 
 /// Kennzahlen eines Kontos (Sicht profile_stats, Konzept 4.2.4).

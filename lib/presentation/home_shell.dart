@@ -20,14 +20,29 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
+  /// Zählt hoch, wenn man CHAT wählt. Die Chatliste lädt dann neu, damit
+  /// z.B. ein Chat nach «Annehmen» (UC7) im Bereich GESUCHE gleich da ist.
+  final _chatTabSelected = ValueNotifier<int>(0);
+
   // IndexedStack behält alle vier Bereiche im Speicher. So bleibt z.B. die
   // Scrollposition im Feed erhalten, wenn man kurz zu den Chats wechselt.
-  static const _tabs = [
-    MyWantsScreen(),
-    DiscoverScreen(),
-    ChatListScreen(),
-    ProfileScreen(),
+  late final _tabs = [
+    const MyWantsScreen(),
+    const DiscoverScreen(),
+    ChatListScreen(reload: _chatTabSelected),
+    const ProfileScreen(),
   ];
+
+  @override
+  void dispose() {
+    _chatTabSelected.dispose();
+    super.dispose();
+  }
+
+  void _select(int i) {
+    setState(() => _index = i);
+    if (i == 2) _chatTabSelected.value++;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +59,7 @@ class _HomeShellState extends State<HomeShell> {
       body: IndexedStack(index: _index, children: _tabs),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
+        onDestinationSelected: _select,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.description_outlined),

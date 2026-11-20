@@ -99,3 +99,22 @@ const String photoTooLargeMessage =
 /// Tests), zählt mit 0. Das Hochladen scheitert dann ohnehin.
 List<int> fileSizes(List<File> files) =>
     [for (final f in files) f.existsSync() ? f.lengthSync() : 0];
+
+/// Prüft eine Textnachricht im Chat (UC8, F-13). Dieselbe Grenze prüft die
+/// CHECK-Regel message_body_check (supabase/14_chat.sql).
+void checkMessageText(String text) {
+  final length = text.trim().length;
+  if (length == 0) _invalid('Die Nachricht ist leer.');
+  if (length > MessageLimits.maxTextLength) {
+    _invalid('Die Nachricht ist zu lang (höchstens '
+        '${MessageLimits.maxTextLength} Zeichen).');
+  }
+}
+
+/// Prüft den vereinbarten Preis beim Abschluss (UC8 Schritt 7). Gleiche
+/// Grenze wie ein Angebot und die CHECK-Regel in supabase/14_chat.sql.
+void checkDealPrice(int agreedPriceRappen) {
+  if (agreedPriceRappen <= 0 || agreedPriceRappen > OfferLimits.maxPriceRappen) {
+    _invalid('Der Preis liegt ausserhalb des erlaubten Bereichs.');
+  }
+}
