@@ -333,4 +333,87 @@ void main() {
     expect(stats.averageStars, 4.0);
     expect(stats.activeWantCount, 0);
   });
+
+  group('UC4: Pausieren, Aktivieren, Nochmal aufhängen (F-05)', () {
+    Future<List<String>> feedOfBen() async {
+      await repo.signOut();
+      await repo.signIn('ben@refind.test', 'refind123');
+      final feed = await repo.getFeed(const FeedFilter());
+      await repo.signOut();
+      await repo.signIn('anna@refind.test', 'refind123');
+      return [for (final i in feed) i.want.id];
+    }
+
+    Matcher conflict = throwsA(isA<RepositoryException>()
+        .having((e) => e.kind, 'kind', RepositoryErrorKind.konflikt)
+        .having((e) => e.message, 'message', wantStatusConflictMessage));
+
+    setUp(() => repo.signIn('anna@refind.test', 'refind123'));
+
+    test('TC10: pausiert fehlt im Feed, nach Aktivieren wieder da', () async {
+      await repo.setWantStatus('want-rolex', WantStatus.pausiert);
+      expect(await feedOfBen(), isNot(contains('want-rolex')));
+
+      await repo.setWantStatus('want-rolex', WantStatus.aktiv);
+      expect(await feedOfBen(), contains('want-rolex'));
+    });
+
+    test('TC11: abgelaufenes Gesuch nochmal aufhängen: 14 Tage, wieder im Feed',
+        () async {
+      expect(await feedOfBen(), isNot(contains('want-technics')));
+      final before = DateTime.now();
+      final want = await repo.republishWant('want-technics');
+      expect(want.status, WantStatus.aktiv);
+      expect(want.createdAt.isBefore(before), isFalse); // neu aufgehängt
+      expect(want.expiresAt.difference(want.createdAt), const Duration(days: 14));
+      expect(await feedOfBen(), contains('want-technics'));
+    });
+
+    test('pausiertes Gesuch aktivieren (Fujifilm)', () async {
+      await repo.setWantStatus('want-fujifilm', WantStatus.aktiv);
+      final mine = await repo.getMyWants();
+      expect(mine.firstWhere((s) => s.want.id == 'want-fujifilm').want.status,
+          WantStatus.aktiv);
+    });
+
+    test('UC4 Ausnahme: mit angenommenem Angebot nicht pausieren (Omega)',
+        () async {
+      await expectLater(repo.setWantStatus('want-omega', WantStatus.pausiert), conflict);
+    });
+
+    test('erledigt: weder pausieren noch nochmal aufhängen', () async {
+      await expectLater(repo.setWantStatus('want-brompton', WantStatus.pausiert), conflict);
+      await expectLater(repo.republishWant('want-brompton'), conflict);
+    });
+
+    test('aktives Gesuch lässt sich nicht nochmal aufhängen', () async {
+      await expectLater(repo.republishWant('want-rolex'), conflict);
+    });
+
+    test('abgelaufenes Gesuch lässt sich nicht pausieren oder aktivieren',
+        () async {
+      await expectLater(repo.setWantStatus('want-technics', WantStatus.pausiert), conflict);
+      await expectLater(repo.setWantStatus('want-technics', WantStatus.aktiv), conflict);
+    });
+
+    test('nicht erlaubte Wechsel: aktiv → aktiv, aktiv → erledigt', () async {
+      await expectLater(repo.setWantStatus('want-rolex', WantStatus.aktiv), conflict);
+      await expectLater(repo.setWantStatus('want-rolex', WantStatus.erledigt), conflict);
+    });
+
+    test('TC28: fremdes Gesuch: nichtBerechtigt', () async {
+      await repo.signOut();
+      await repo.signIn('ben@refind.test', 'refind123');
+      await expectLater(
+        repo.setWantStatus('want-rolex', WantStatus.pausiert),
+        throwsA(isA<RepositoryException>()
+            .having((e) => e.kind, 'kind', RepositoryErrorKind.nichtBerechtigt)),
+      );
+      await expectLater(
+        repo.republishWant('want-technics'),
+        throwsA(isA<RepositoryException>()
+            .having((e) => e.kind, 'kind', RepositoryErrorKind.nichtBerechtigt)),
+      );
+    });
+  });
 }

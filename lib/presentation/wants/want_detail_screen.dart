@@ -3,20 +3,24 @@ import 'package:provider/provider.dart';
 
 import '../../application/logic/offer_rules.dart';
 import '../../application/logic/price_logic.dart';
+import '../../application/logic/status_logic.dart';
 import '../../application/services/offer_service.dart';
+import '../../application/services/want_service.dart';
 import '../../data/repository_exception.dart';
 import '../../model/model.dart';
 import '../chat/chat_screen.dart';
 import '../theme.dart';
 import '../widgets/connection_error.dart';
 import '../widgets/offer_photo.dart';
+import 'want_status_label.dart';
 
 /// Gesuch Detail · Angebote (UC4, UC7, F-10 bis F-12).
 ///
 /// Zeigt alle Angebote zum Gesuch, sortiert nach Preis oder Datum. Angebote
 /// über der Preisobergrenze sind gekennzeichnet (F-11). «Annehmen» ruft die
 /// Datenbank-Funktion accept_offer auf und öffnet danach den Chat (F-12).
-/// Bearbeiten und Pausieren (UC4) folgen.
+/// Pausieren, Aktivieren und Nochmal aufhängen (UC4, F-05) zeigt die Maske
+/// nach der StatusLogic. Bearbeiten (UC4 Schritt 4) folgt.
 class WantDetailScreen extends StatefulWidget {
   const WantDetailScreen({super.key, required this.summary});
 
@@ -35,7 +39,16 @@ class _WantDetailScreenState extends State<WantDetailScreen> {
   String? _acceptingId;
   bool _markedSeen = false;
 
-  Want get _want => widget.summary.want;
+  /// Das Gesuch, wie es gerade ist. Ändert sich nach Pausieren usw.
+  late Want _want = widget.summary.want;
+
+  /// Läuft gerade Pausieren, Aktivieren oder Nochmal aufhängen?
+  bool _changingStatus = false;
+
+  /// Vor dem Laden der Angebote gilt der Wert aus «Meine Gesuche».
+  bool get _hasAcceptedOffer => _offers.isEmpty
+      ? widget.summary.hasAcceptedOffer
+      : _offers.any((o) => o.status == OfferStatus.angenommen);
 
   @override
   void initState() {
@@ -138,6 +151,50 @@ class _WantDetailScreenState extends State<WantDetailScreen> {
     }
   }
 
+  /// UC4 Schritt 3 und 6: Status ändern, danach Meldung unten.
+  Future<void> _runAction(WantAction action) async {
+    final service = context.read<WantService>();
+    setState(() => _changingStatus = true);
+    try {
+      final (updated, message) = switch (action) {
+        WantAction.pausieren => (
+            await service.setWantStatus(_want, WantStatus.pausiert),
+            'Gesuch pausiert. Es erscheint nicht mehr unter «Entdecken».',
+          ),
+        WantAction.aktivieren => (
+            await service.setWantStatus(_want, WantStatus.aktiv),
+            'Gesuch ist wieder aktiv.',
+          ),
+        WantAction.nochmalAufhaengen => (
+            await service.republishWant(_want),
+            'Gesuch hängt wieder, 14 Tage lang.',
+          ),
+        WantAction.bearbeiten => throw UnsupportedError('Bearbeiten folgt'),
+      };
+      if (!mounted) return;
+      setState(() => _want = updated);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
+      if (e.kind == RepositoryErrorKind.keineVerbindung) {
+        showConnectionError(context, () => _runAction(action));
+      } else {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text(unexpectedErrorMessage)));
+      }
+    } finally {
+      if (mounted) setState(() => _changingStatus = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -152,7 +209,21 @@ class _WantDetailScreenState extends State<WantDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_want.category.toUpperCase(), style: refindLabelStyle),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(_want.category.toUpperCase(),
+                            style: refindLabelStyle, overflow: TextOverflow.ellipsis),
+                      ),
+                      const SizedBox(width: 8),
+                      WantStatusText(
+                        key: const Key('want-detail-status'),
+                        want: _want,
+                        hasAcceptedOffer: _hasAcceptedOffer,
+                        now: DateTime.now(),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
                   Text(_want.title, style: textTheme.headlineMedium),
                   const SizedBox(height: 4),
@@ -161,14 +232,37 @@ class _WantDetailScreenState extends State<WantDetailScreen> {
                     '${widget.summary.region.name}',
                     style: const TextStyle(color: RefindColors.muted),
                   ),
+                  // Erst nach dem Laden der Angebote: Ob eines angenommen
+                  // ist, entscheidet, welche Knöpfe erlaubt sind.
+                  if (!_loading || _offers.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _StatusActions(
+                      actions: StatusLogic.allowedActions(
+                        _want,
+                        now: DateTime.now(),
+                        hasAcceptedOffer: _hasAcceptedOffer,
+                      ),
+                      busy: _changingStatus,
+                      onAction: _runAction,
+                    ),
+                  ],
                   const SizedBox(height: 16),
-                  Row(
+                  // Wrap statt Row: Auf schmalen Handys (360 dp) rutschen
+                  // die Sortier-Chips unter die Überschrift statt überzulaufen.
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    runSpacing: 4,
                     children: [
                       Text('ANGEBOTE (${_offers.length})', style: refindLabelStyle),
-                      const Spacer(),
-                      _SortChip('Günstigste', OfferSort.guenstigste, _sort, _changeSort),
-                      const SizedBox(width: 8),
-                      _SortChip('Neueste', OfferSort.neueste, _sort, _changeSort),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          _SortChip('Günstigste', OfferSort.guenstigste, _sort,
+                              _changeSort),
+                          _SortChip('Neueste', OfferSort.neueste, _sort, _changeSort),
+                        ],
+                      ),
                     ],
                   ),
                 ],
@@ -216,6 +310,47 @@ class _WantDetailScreenState extends State<WantDetailScreen> {
         );
       },
     );
+  }
+}
+
+/// Knöpfe für UC4: «Pausieren», «Aktivieren» oder «Nochmal aufhängen».
+/// Welche erscheinen, entscheidet die StatusLogic (Abbildung 2).
+/// «Bearbeiten» (UC4 Schritt 4) folgt.
+class _StatusActions extends StatelessWidget {
+  const _StatusActions({
+    required this.actions,
+    required this.busy,
+    required this.onAction,
+  });
+
+  final Set<WantAction> actions;
+  final bool busy;
+  final ValueChanged<WantAction> onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final buttons = <Widget>[
+      if (actions.contains(WantAction.pausieren))
+        OutlinedButton(
+          key: const Key('want-pause'),
+          onPressed: busy ? null : () => onAction(WantAction.pausieren),
+          child: const Text('Pausieren'),
+        ),
+      if (actions.contains(WantAction.aktivieren))
+        FilledButton(
+          key: const Key('want-activate'),
+          onPressed: busy ? null : () => onAction(WantAction.aktivieren),
+          child: const Text('Aktivieren'),
+        ),
+      if (actions.contains(WantAction.nochmalAufhaengen))
+        FilledButton(
+          key: const Key('want-republish'),
+          onPressed: busy ? null : () => onAction(WantAction.nochmalAufhaengen),
+          child: const Text('Nochmal aufhängen'),
+        ),
+    ];
+    if (buttons.isEmpty) return const SizedBox.shrink();
+    return Wrap(spacing: 8, runSpacing: 8, children: buttons);
   }
 }
 
@@ -288,12 +423,14 @@ class _OfferCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              // Wrap statt Row: Auf 360 dp passen Preis und «ÜBER BUDGET
+              // +CHF 100» nicht nebeneinander, der Hinweis rutscht darunter.
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.end,
+                spacing: 12,
                 children: [
                   Text(formatChf(offer.priceRappen),
                       style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(width: 12),
                   if (overBudget != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 3),

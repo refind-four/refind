@@ -102,6 +102,11 @@ void main() {
 
   testWidgets('UC7: über Budget markiert, sortiert, annehmen öffnet den Chat',
       (tester) async {
+    // Hoher Bildschirm (360 × 1300 dp): Kopf mit Status-Knöpfen und alle
+    // drei Angebote gleichzeitig sichtbar, damit die Reihenfolge prüfbar ist
+    tester.view.physicalSize = const Size(1080, 3900);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
     await tester.runAsync(() => repo.signIn('anna@refind.test', 'refind123'));
     final summary =
         (await tester.runAsync(repo.getMyWants))!

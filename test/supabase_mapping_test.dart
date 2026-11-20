@@ -54,21 +54,19 @@ void main() {
 
     test('want: Beträge in Rappen, leere Beschreibung wird ""', () {
       final w = wantRow();
-      final want = wantFromRow(w, now: DateTime.utc(2026, 11, 12, 12));
+      final want = wantFromRow(w);
       expect(want.budgetMaxRappen, 165000);
       expect(want.description, '');
       expect(want.status, WantStatus.aktiv);
     });
 
-    test('want: aktiv, aber Ablaufdatum vorbei → abgelaufen', () {
-      final want = wantFromRow(wantRow(), now: DateTime.utc(2026, 11, 27));
-      expect(want.status, WantStatus.abgelaufen);
-    });
-
-    test('want: pausiert bleibt pausiert, auch nach Ablauf', () {
-      final want =
-          wantFromRow(wantRow(status: 'pausiert'), now: DateTime.utc(2026, 12));
-      expect(want.status, WantStatus.pausiert);
+    test('want: Status wie in der Datenbank, auch nach dem Ablaufdatum', () {
+      // Ab dem Ablaufdatum entscheidet die StatusLogic (status_logic_test),
+      // spätestens nach einer Stunde setzt 12_ablauf.sql den Status.
+      expect(wantFromRow(wantRow(expiresAt: '2020-01-01T00:00:00+00:00')).status,
+          WantStatus.aktiv);
+      expect(wantFromRow(wantRow(status: 'abgelaufen')).status,
+          WantStatus.abgelaufen);
     });
 
     test('Zeile aus get_feed mit Region und Name des Käufers', () {

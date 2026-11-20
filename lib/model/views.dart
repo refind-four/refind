@@ -49,11 +49,16 @@ class WantSummary {
     required this.offerCount,
     required this.newOfferCount,
     required this.region,
+    this.hasAcceptedOffer = false,
   });
 
   final Want want;
   final int offerCount;
   final int newOfferCount;
+
+  /// Ist ein Angebot angenommen? Dann läuft das Gesuch nicht mehr ab und
+  /// lässt sich nicht mehr pausieren oder nochmal aufhängen (UC4, Ausnahme).
+  final bool hasAcceptedOffer;
 
   /// Region des Gesuchs, damit die Karte «Bern» statt einer Nummer zeigt.
   final Place region;

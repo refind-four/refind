@@ -29,3 +29,10 @@ class RepositoryException implements Exception {
 /// ist abgesagt. Mock und Supabase zeigen denselben Text.
 const String acceptConflictMessage =
     'Dieses Angebot lässt sich nicht mehr annehmen. Bitte lade die Angebote neu.';
+
+/// Meldung, wenn ein Gesuch nicht pausiert, aktiviert oder nochmal
+/// aufgehängt werden kann (UC4): Status hat sich geändert, Gesuch ist
+/// abgelaufen, oder ein Angebot wurde angenommen. Mock und Supabase zeigen
+/// denselben Text.
+const String wantStatusConflictMessage =
+    'Das geht bei diesem Gesuch gerade nicht. Bitte lade es neu.';

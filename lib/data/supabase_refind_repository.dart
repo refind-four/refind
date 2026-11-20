@@ -240,6 +240,7 @@ class SupabaseRefindRepository implements RefindRepository {
           offerCount: offers.length,
           newOfferCount: offers.where((o) => o['status'] == 'neu').length,
           region: placeFromRow(row['region'] as Map<String, dynamic>),
+          hasAcceptedOffer: offers.any((o) => o['status'] == 'angenommen'),
         );
       }).toList();
     });
@@ -249,13 +250,47 @@ class SupabaseRefindRepository implements RefindRepository {
   Future<Want> updateWant(String wantId, WantDraft draft) =>
       throw UnimplementedError('updateWant folgt mit UC4.');
 
+  /// UC4 Schritt 3: Pausieren oder Aktivieren über die Datenbank-Funktion
+  /// set_want_status (supabase/11_gesuch_status.sql). Direkt darf die App
+  /// den Status nicht mehr ändern.
   @override
-  Future<void> setWantStatus(String wantId, WantStatus status) =>
-      throw UnimplementedError('setWantStatus folgt mit UC4.');
+  Future<void> setWantStatus(String wantId, WantStatus status) async {
+    if (status != WantStatus.aktiv && status != WantStatus.pausiert) {
+      throw const RepositoryException(
+          RepositoryErrorKind.ungueltigeEingabe, wantStatusConflictMessage);
+    }
+    await _guard(() => _wantStatusCall(() => _client.rpc('set_want_status',
+        params: {'p_want_id': wantId, 'p_status': status.name})));
+  }
 
+  /// UC4 Schritt 6: «Nochmal aufhängen» über republish_want. Setzt
+  /// created_at und expires_at neu (14 Tage) und den Status aktiv.
   @override
-  Future<Want> republishWant(String wantId) =>
-      throw UnimplementedError('republishWant folgt mit UC4.');
+  Future<Want> republishWant(String wantId) {
+    return _guard(() async {
+      final row = await _wantStatusCall(() =>
+          _client.rpc('republish_want', params: {'p_want_id': wantId}));
+      return wantFromRow(row as Map<String, dynamic>);
+    });
+  }
+
+  /// Fehler der Status-Funktionen mit eigener Meldung. Ohne diese Hilfe
+  /// würde mapSupabaseError P0001 als «Angebot annehmen» melden.
+  Future<dynamic> _wantStatusCall(Future<dynamic> Function() call) async {
+    try {
+      return await call();
+    } on PostgrestException catch (e) {
+      if (e.code == 'P0001') {
+        throw const RepositoryException(
+            RepositoryErrorKind.konflikt, wantStatusConflictMessage);
+      }
+      if (e.code == 'P0002') {
+        throw const RepositoryException(
+            RepositoryErrorKind.ungueltigeEingabe, 'Gesuch nicht gefunden.');
+      }
+      rethrow;
+    }
+  }
 
   // ---------------------------------------------------------------------
   // Entdecken (UC5)
@@ -512,14 +547,13 @@ User userFromRow(Map<String, dynamic> row) => User(
       memberSince: DateTime.parse(row['member_since'] as String),
     );
 
-/// Ein aktives Gesuch, dessen Ablaufdatum vorbei ist, zeigt die App als
-/// «abgelaufen», auch wenn in der Datenbank noch «aktiv» steht.
-Want wantFromRow(Map<String, dynamic> row, {DateTime? now}) {
+/// Status wie in der Datenbank. Ob ein Gesuch schon abgelaufen ist, bevor
+/// der stündliche Auftrag (supabase/12_ablauf.sql) lief, entscheidet die
+/// StatusLogic in der Anwendungsschicht, weil sie auch angenommene Angebote
+/// berücksichtigt.
+Want wantFromRow(Map<String, dynamic> row) {
   final expiresAt = DateTime.parse(row['expires_at'] as String).toLocal();
-  var status = WantStatus.values.byName(row['status'] as String);
-  if (status == WantStatus.aktiv && expiresAt.isBefore(now ?? DateTime.now())) {
-    status = WantStatus.abgelaufen;
-  }
+  final status = WantStatus.values.byName(row['status'] as String);
   return Want(
     id: row['id'] as String,
     ownerId: row['owner_id'] as String,

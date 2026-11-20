@@ -32,4 +32,34 @@ void main() {
     expect(since(const Duration(days: 5)), 'vor 5 Tagen');
     expect(since(const Duration(days: 30)), 'vor 30 Tagen');
   });
+
+  group('verbleibende Laufzeit', () {
+    test('Tage', () {
+      expect(formatRemaining(const Duration(days: 14)), '14 Tage');
+      expect(formatRemaining(const Duration(days: 1)), '1 Tag');
+    });
+
+    test('angefangene Tage werden aufgerundet', () {
+      // frisch aufgehängt: 14 Tage minus ein paar Sekunden
+      expect(formatRemaining(const Duration(days: 13, hours: 23, minutes: 59, seconds: 59)),
+          '14 Tage');
+      expect(formatRemaining(const Duration(days: 13, hours: 23)), '14 Tage');
+      expect(formatRemaining(const Duration(days: 2, hours: 23)), '3 Tage');
+      expect(formatRemaining(const Duration(days: 1, hours: 23)), '2 Tage');
+      expect(formatRemaining(const Duration(days: 1, seconds: 1)), '2 Tage');
+    });
+
+    test('Stunden und Minuten', () {
+      expect(formatRemaining(const Duration(hours: 23, minutes: 59)), '23 Std');
+      expect(formatRemaining(const Duration(hours: 1)), '1 Std');
+      expect(formatRemaining(const Duration(minutes: 59)), '59 Min');
+      expect(formatRemaining(const Duration(minutes: 1)), '1 Min');
+    });
+
+    test('unter einer Minute oder vorbei', () {
+      expect(formatRemaining(const Duration(seconds: 59)), '< 1 Min');
+      expect(formatRemaining(Duration.zero), '< 1 Min');
+      expect(formatRemaining(const Duration(minutes: -5)), '< 1 Min');
+    });
+  });
 }

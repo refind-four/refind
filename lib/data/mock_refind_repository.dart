@@ -296,6 +296,7 @@ class MockRefindRepository implements RefindRepository {
               .where((o) => o.wantId == w.id && o.status == OfferStatus.neu)
               .length,
           region: _place(w.regionId),
+          hasAcceptedOffer: _hasAcceptedOffer(w.id),
         ),
     ];
   }
@@ -322,28 +323,49 @@ class MockRefindRepository implements RefindRepository {
   }
 
   @override
+  /// Wie set_want_status in supabase/11_gesuch_status.sql: nur aktiv ⇄
+  /// pausiert, nicht abgelaufen, ohne angenommenes Angebot.
+  @override
   Future<void> setWantStatus(String wantId, WantStatus status) async {
     await _wait();
     final want = _myWant(wantId);
     final allowed = (want.status == WantStatus.aktiv && status == WantStatus.pausiert) ||
         (want.status == WantStatus.pausiert && status == WantStatus.aktiv);
-    if (!allowed) {
-      _conflict('Wechsel von «${want.status.name}» zu «${status.name}» ist nicht erlaubt.');
+    if (!allowed ||
+        !want.expiresAt.isAfter(DateTime.now()) ||
+        _hasAcceptedOffer(want.id)) {
+      _conflict(wantStatusConflictMessage);
     }
     _replaceWant(want.copyWith(status: status));
   }
 
+  /// Wie republish_want in supabase/11_gesuch_status.sql: nur abgelaufene
+  /// Gesuche (Status oder Datum), ohne angenommenes Angebot. Gilt als neu
+  /// aufgehängt: erfasst jetzt, sichtbar 14 Tage (UC4 Schritt 6).
   @override
   Future<Want> republishWant(String wantId) async {
     await _wait();
     final want = _myWant(wantId);
-    if (want.status != WantStatus.abgelaufen) {
-      _conflict('Nur abgelaufene Gesuche lassen sich erneut aufhängen.');
+    final now = DateTime.now();
+    final expired = want.status == WantStatus.abgelaufen ||
+        ((want.status == WantStatus.aktiv || want.status == WantStatus.pausiert) &&
+            !want.expiresAt.isAfter(now));
+    if (!expired || _hasAcceptedOffer(want.id)) {
+      _conflict(wantStatusConflictMessage);
     }
-    final duration = want.expiresAt.difference(want.createdAt);
-    final updated = want.copyWith(
+    final updated = Want(
+      id: want.id,
+      ownerId: want.ownerId,
+      title: want.title,
+      category: want.category,
+      description: want.description,
+      budgetMaxRappen: want.budgetMaxRappen,
+      condition: want.condition,
+      regionId: want.regionId,
+      radiusKm: want.radiusKm,
+      createdAt: now,
+      expiresAt: now.add(const Duration(days: WantLimits.defaultDurationDays)),
       status: WantStatus.aktiv,
-      expiresAt: DateTime.now().add(duration),
     );
     _replaceWant(updated);
     return updated;
