@@ -5,15 +5,38 @@ import '../../application/state/session_provider.dart';
 import '../../data/repository_exception.dart';
 import '../theme.dart';
 import '../widgets/connection_error.dart';
-import '../widgets/placeholder_screen.dart';
+import '../widgets/form_fields.dart';
 
-/// Profil bearbeiten (UC2). Von hier führt «Abmelden» zurück zu «Anmelden».
-/// «Konto löschen» löscht das Konto mit allen Daten (TC06, N-05).
-/// Name, Wohnort und Bild ändern folgt (F-02).
-class ProfileEditScreen extends StatelessWidget {
+/// Profil bearbeiten (UC2). Zeigt Anzeigename und Mailadresse (nur lesen)
+/// und bietet «Abmelden» und «Konto löschen» (TC06, N-05).
+/// Name, Wohnort und Profilbild ändern (F-02) ist noch offen.
+class ProfileEditScreen extends StatefulWidget {
   const ProfileEditScreen({super.key});
 
-  Future<void> _signOut(BuildContext context) async {
+  @override
+  State<ProfileEditScreen> createState() => _ProfileEditScreenState();
+}
+
+class _ProfileEditScreenState extends State<ProfileEditScreen> {
+  String? _email;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEmail();
+  }
+
+  Future<void> _loadEmail() async {
+    try {
+      final email = await context.read<SessionProvider>().myEmail();
+      if (mounted) setState(() => _email = email);
+    } catch (_) {
+      // Ohne Verbindung bleibt das Feld leer, der Rest geht trotzdem.
+      if (mounted) setState(() => _email = '');
+    }
+  }
+
+  Future<void> _signOut() async {
     final navigator = Navigator.of(context);
     await context.read<SessionProvider>().signOut();
     // Alle geöffneten Masken schliessen. Darunter zeigt SessionGate jetzt
@@ -21,12 +44,12 @@ class ProfileEditScreen extends StatelessWidget {
     navigator.popUntil((route) => route.isFirst);
   }
 
-  Future<void> _deleteAccount(BuildContext context) async {
+  Future<void> _deleteAccount() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => const DeleteAccountDialog(),
     );
-    if (confirmed != true || !context.mounted) return;
+    if (confirmed != true || !mounted) return;
 
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
@@ -48,18 +71,55 @@ class ProfileEditScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PlaceholderScreen(
-      title: 'Profil bearbeiten',
-      useCase: 'UC2',
-      actions: [
-        PlaceholderAction(
-          'Speichern',
-          primary: true,
-          () => Navigator.of(context).pop(),
+    final user = context.watch<SessionProvider>().user;
+    return Scaffold(
+      appBar: AppBar(),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          children: [
+            Text('Profil bearbeiten',
+                style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(height: 24),
+            LabeledField(
+              label: 'Anzeigename',
+              child: _ReadOnlyValue(user?.displayName ?? '', key: const Key('profile-name')),
+            ),
+            LabeledField(
+              label: 'Mailadresse',
+              child: _ReadOnlyValue(_email ?? '…', key: const Key('profile-email')),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(onPressed: _signOut, child: const Text('Abmelden')),
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 8),
+            TextButton(
+              key: const Key('profile-delete'),
+              onPressed: _deleteAccount,
+              style: TextButton.styleFrom(foregroundColor: RefindColors.accent),
+              child: const Text('Konto löschen'),
+            ),
+          ],
         ),
-        PlaceholderAction('Abmelden', () => _signOut(context)),
-        PlaceholderAction('Konto löschen', () => _deleteAccount(context)),
-      ],
+      ),
+    );
+  }
+}
+
+/// Wert, den man hier nur ansehen, nicht ändern kann.
+class _ReadOnlyValue extends StatelessWidget {
+  const _ReadOnlyValue(this.value, {super.key});
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      color: Colors.white,
+      child: Text(value, overflow: TextOverflow.ellipsis),
     );
   }
 }

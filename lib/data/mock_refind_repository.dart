@@ -226,6 +226,13 @@ class MockRefindRepository implements RefindRepository {
   }
 
   @override
+  Future<String> getMyEmail() async {
+    await _wait();
+    final me = _me;
+    return _credentials.entries.firstWhere((e) => e.value.userId == me).key;
+  }
+
+  @override
   Future<User> updateProfile(
     String displayName,
     int cityId,

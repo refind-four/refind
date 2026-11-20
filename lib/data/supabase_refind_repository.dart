@@ -173,6 +173,12 @@ class SupabaseRefindRepository implements RefindRepository {
   @override
   Future<User> getMyProfile() => _guard(() => _loadProfile(_me));
 
+  @override
+  Future<String> getMyEmail() async {
+    _me;
+    return _client.auth.currentUser?.email ?? '';
+  }
+
   Future<User> _loadProfile(String id) async {
     final row = await _client.from('profile').select().eq('id', id).single();
     return userFromRow(row);

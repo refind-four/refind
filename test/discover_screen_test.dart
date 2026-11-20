@@ -256,4 +256,94 @@ void main() {
     expect(find.byIcon(Icons.explore_outlined), findsOneWidget);
     expect(find.byIcon(Icons.description), findsOneWidget);
   });
+
+  group('Region und Umkreis (F-08, TC14)', () {
+    Future<void> openSheet(WidgetTester tester) async {
+      await tester.tap(find.byKey(const Key('feed-search')));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> chooseRegion(WidgetTester tester, String search, String place,
+        String radius) async {
+      await tester.ensureVisible(find.byKey(const Key('filter-region-change')));
+      await tester.tap(find.byKey(const Key('filter-region-change')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('region-search')), search);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(place));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(radius));
+      await tester.tap(find.text('Übernehmen'));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> apply(WidgetTester tester) async {
+      await tester.ensureVisible(find.byKey(const Key('filter-apply')));
+      await tester.tap(find.byKey(const Key('filter-apply')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('ohne Wahl: ganze Schweiz, «ändern» ist mit dem Wohnort vorbelegt',
+        (tester) async {
+      await openDiscover(tester);
+      await openSheet(tester);
+      expect(find.text('Ganze Schweiz'), findsOneWidget);
+
+      await tester.ensureVisible(find.byKey(const Key('filter-region-change')));
+      await tester.tap(find.byKey(const Key('filter-region-change')));
+      await tester.pumpAndSettle();
+      // Ben wohnt in Zürich, Suchradius 30 km (UC5 Schritt 4)
+      expect(find.text('Gewählt: 8001 Zürich'), findsOneWidget);
+    });
+
+    testWidgets('TC14: Winterthur + 20 km zeigt die Leica M6, nicht die aus Bern',
+        (tester) async {
+      await openDiscover(tester);
+      await openSheet(tester);
+      await chooseRegion(tester, 'Winter', '8400 Winterthur', '20 km');
+      expect(find.text('Winterthur + 20 km'), findsOneWidget);
+      await apply(tester);
+
+      expect(find.text('Leica M6'), findsOneWidget);
+      expect(find.text('Leica Q2'), findsNothing);
+      expect(find.text('Eames Lounge Chair'), findsNothing);
+      expect(find.text('Rolex Datejust 36'), findsNothing);
+      // Suchfeld zeigt den Umkreis
+      expect(find.text('Winterthur + 20 km'), findsOneWidget);
+    });
+
+    testWidgets('Umkreis mit Suchbegriff, dann «Ganze Schweiz» wieder', (tester) async {
+      await openDiscover(tester);
+      await openSheet(tester);
+      await tester.enterText(find.byKey(const Key('filter-query')), 'Leica');
+      await chooseRegion(tester, '3000', '3000 Bern', '10 km');
+      await apply(tester);
+      expect(find.text('Leica · Bern + 10 km'), findsOneWidget);
+      expect(find.text('Leica Q2'), findsOneWidget); // in Bern
+      expect(find.text('Leica M6'), findsNothing); // in Winterthur
+
+      await openSheet(tester);
+      await tester.tap(find.byKey(const Key('filter-region-clear')));
+      await tester.pump();
+      expect(find.text('Ganze Schweiz'), findsOneWidget);
+      await apply(tester);
+      expect(find.text('Leica'), findsOneWidget);
+      expect(find.text('Leica Q2'), findsOneWidget);
+      expect(find.text('Leica M6'), findsOneWidget);
+    });
+
+    testWidgets('kein Treffer im Umkreis: «Filter zurücksetzen» entfernt auch den Ort',
+        (tester) async {
+      await openDiscover(tester);
+      await openSheet(tester);
+      await chooseRegion(tester, 'Gen', '1201 Genève', '10 km');
+      await apply(tester);
+      expect(find.text('Kein Gesuch passt zu deiner Suche.'), findsOneWidget);
+
+      await tester.tap(find.text('Filter zurücksetzen'));
+      await tester.pumpAndSettle();
+      expect(find.text('Wer sucht was?'), findsOneWidget);
+      expect(find.text('Leica Q2'), findsOneWidget);
+    });
+  });
 }

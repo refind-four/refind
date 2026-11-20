@@ -37,6 +37,10 @@ abstract interface class RefindRepository {
   /// Eigenes Profil laden.
   Future<User> getMyProfile();
 
+  /// Mailadresse des angemeldeten Kontos. Sie gehört dem Anmeldedienst,
+  /// nicht dem Profil (Konzept 2.1). Ergänzung zu Konzept 4.3.2.
+  Future<String> getMyEmail();
+
   /// Profil ändern.
   Future<User> updateProfile(
     String displayName,

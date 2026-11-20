@@ -29,6 +29,9 @@ class AuthService {
 
   /// Liefert das Profil, wenn noch eine gültige Sitzung besteht, sonst null.
   /// UC1 Schritt 1: mit gültiger Sitzung direkt «Meine Gesuche».
+  /// Mailadresse des angemeldeten Kontos (nur lesen, «Profil bearbeiten»).
+  Future<String> getMyEmail() => _repository.getMyEmail();
+
   Future<User?> restoreSession() async {
     try {
       return await _repository.getMyProfile();

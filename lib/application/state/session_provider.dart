@@ -82,6 +82,9 @@ class SessionProvider extends ChangeNotifier {
     _setUser(null);
   }
 
+  /// Mailadresse des angemeldeten Kontos (nur zum Anzeigen).
+  Future<String> myEmail() => _auth.getMyEmail();
+
   /// UC2, TC06: Konto löschen, danach zeigt SessionGate «Anmelden».
   Future<void> deleteAccount() async {
     await _auth.deleteAccount();

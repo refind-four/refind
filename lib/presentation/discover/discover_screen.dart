@@ -26,6 +26,9 @@ class DiscoverScreen extends StatefulWidget {
 
 class _DiscoverScreenState extends State<DiscoverScreen> {
   FeedFilter _filter = const FeedFilter();
+
+  /// Ortschaft zum Umkreis im Filter (F-08), für die Anzeige im Suchfeld.
+  Place? _place;
   List<FeedItem> _items = const [];
   bool _loading = true;
   String? _error;
@@ -83,14 +86,16 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   void _resetFilter() {
     _filter = const FeedFilter();
+    _place = null;
     _load();
   }
 
   /// UC5 Schritt 3 bis 5: Sheet öffnen, mit den neuen Filtern neu laden.
   Future<void> _openFilterSheet() async {
-    final filter = await showFilterSheet(context, _filter);
-    if (filter == null || !mounted) return;
-    _filter = filter;
+    final choice = await showFilterSheet(context, _filter, currentPlace: _place);
+    if (choice == null || !mounted) return;
+    _filter = choice.filter;
+    _place = choice.place;
     _load();
   }
 
@@ -108,7 +113,11 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: _SearchField(query: _filter.query, onTap: _openFilterSheet),
+              child: _SearchField(
+                query: _filter.query,
+                region: _place == null ? null : '${_place!.name} + ${_filter.radiusKm} km',
+                onTap: _openFilterSheet,
+              ),
             ),
             const SizedBox(height: 12),
             _CategoryBar(selected: _filter.category, onSelected: _setCategory),
@@ -171,14 +180,20 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 /// Suchfeld «Wer sucht was?». Keine Eingabe hier: ein Tipp öffnet das
 /// Sheet «Suchen und filtern» (UC5 Schritt 3).
 class _SearchField extends StatelessWidget {
-  const _SearchField({required this.query, required this.onTap});
+  const _SearchField({required this.query, required this.onTap, this.region});
 
   final String? query;
   final VoidCallback onTap;
 
+  /// Gewählter Umkreis, z.B. «Winterthur + 20 km» (F-08).
+  final String? region;
+
   @override
   Widget build(BuildContext context) {
-    final text = query?.trim() ?? '';
+    final text = [
+      if ((query?.trim() ?? '').isNotEmpty) query!.trim(),
+      ?region,
+    ].join(' · ');
     return Material(
       color: RefindColors.field,
       shape: const StadiumBorder(),

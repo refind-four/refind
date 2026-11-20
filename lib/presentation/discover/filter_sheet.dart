@@ -1,28 +1,48 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../application/logic/filter_logic.dart';
+import '../../application/services/want_service.dart';
+import '../../application/state/session_provider.dart';
 import '../../model/model.dart';
 import '../theme.dart';
+import '../wants/want_option_sheets.dart';
 import '../widgets/choice_chips.dart';
 import '../widgets/form_fields.dart';
 
-/// Suchen und filtern (UC5 Schritt 3 und 4, F-07, Abbildung 9).
+/// Ergebnis von «Suchen und filtern»: die Filter und die gewählte
+/// Ortschaft (für die Anzeige «Winterthur + 20 km» in «Entdecken»).
+class FilterChoice {
+  const FilterChoice(this.filter, this.place);
+
+  final FeedFilter filter;
+
+  /// Ortschaft für den Umkreis (F-08), oder null für die ganze Schweiz.
+  final Place? place;
+}
+
+/// Suchen und filtern (UC5 Schritt 3 und 4, F-07, F-08, Abbildung 9).
 ///
 /// Öffnet sich über «Entdecken», vorbelegt mit den aktuellen Filtern.
 /// «Gesuche anzeigen» gibt die neuen Filter zurück, Wischen nach unten
 /// schliesst das Sheet ohne Änderung (Rückgabe null).
-Future<FeedFilter?> showFilterSheet(BuildContext context, FeedFilter current) {
-  return showModalBottomSheet<FeedFilter>(
+Future<FilterChoice?> showFilterSheet(
+  BuildContext context,
+  FeedFilter current, {
+  Place? currentPlace,
+}) {
+  return showModalBottomSheet<FilterChoice>(
     context: context,
     isScrollControlled: true,
-    builder: (_) => FilterSheet(current: current),
+    builder: (_) => FilterSheet(current: current, currentPlace: currentPlace),
   );
 }
 
 class FilterSheet extends StatefulWidget {
-  const FilterSheet({super.key, required this.current});
+  const FilterSheet({super.key, required this.current, this.currentPlace});
 
   final FeedFilter current;
+  final Place? currentPlace;
 
   @override
   State<FilterSheet> createState() => _FilterSheetState();
@@ -32,6 +52,13 @@ class _FilterSheetState extends State<FilterSheet> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _query;
   late String? _category;
+
+  /// F-08: Ortschaft und Umkreis. Ohne Ortschaft: ganze Schweiz.
+  late Place? _place = widget.currentPlace;
+  late int _radiusKm = widget.current.radiusKm ?? _profileRadius;
+
+  int get _profileRadius =>
+      context.read<SessionProvider>().user?.radiusKm ?? WantLimits.radiusOptions[1];
 
   @override
   void initState() {
@@ -58,21 +85,52 @@ class _FilterSheetState extends State<FilterSheet> {
     return null;
   }
 
+  /// UC5 Schritt 4: Ortschaft und Umkreis wählen. Das Sheet ist mit dem
+  /// Wohnort und dem Suchradius aus dem Profil vorbelegt, solange noch
+  /// keine Ortschaft gewählt ist.
+  Future<void> _changeRegion() async {
+    final user = context.read<SessionProvider>().user;
+    var region = _place;
+    if (region == null && user != null) {
+      try {
+        region = await context.read<WantService>().homePlace(user);
+      } catch (_) {
+        // Ohne Verbindung: Sheet ohne Vorbelegung
+      }
+    }
+    if (!mounted) return;
+    final choice = await showRegionSheet(
+      context,
+      region: region,
+      radiusKm: _place == null ? _profileRadius : _radiusKm,
+      profileRadiusKm: _profileRadius,
+    );
+    if (choice == null || !mounted) return;
+    setState(() {
+      _place = choice.region;
+      _radiusKm = choice.radiusKm;
+    });
+  }
+
   void _apply() {
     if (!_formKey.currentState!.validate()) return;
     final query = _query.text.trim();
-    Navigator.of(context).pop(FeedFilter(
-      query: query.isEmpty ? null : query,
-      category: _category,
-      // Ortschaft und Umkreis (F-08) bleiben, wie sie waren.
-      placeId: widget.current.placeId,
-      radiusKm: widget.current.radiusKm,
+    final place = _place;
+    Navigator.of(context).pop(FilterChoice(
+      FeedFilter(
+        query: query.isEmpty ? null : query,
+        category: _category,
+        placeId: place?.id,
+        radiusKm: place == null ? null : _radiusKm,
+      ),
+      place,
     ));
   }
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final place = _place;
     return Padding(
       // Platz für die Tastatur
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -120,6 +178,44 @@ class _FilterSheetState extends State<FilterSheet> {
                   selected: _category,
                   labelOf: (c) => c ?? 'Alle',
                   onSelected: (c) => setState(() => _category = c),
+                ),
+              ),
+              // F-08: Region und Umkreis (Abbildung 9: «Winterthur + 20 km ändern»)
+              LabeledField(
+                label: 'Region & Umkreis',
+                child: Material(
+                  color: RefindColors.field,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            place == null
+                                ? 'Ganze Schweiz'
+                                : '${place.name} + $_radiusKm km',
+                            key: const Key('filter-region'),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (place != null)
+                          IconButton(
+                            key: const Key('filter-region-clear'),
+                            tooltip: 'Ganze Schweiz',
+                            icon: const Icon(Icons.close, size: 18),
+                            color: RefindColors.muted,
+                            onPressed: () => setState(() => _place = null),
+                          ),
+                        TextButton(
+                          key: const Key('filter-region-change'),
+                          onPressed: _changeRegion,
+                          style: TextButton.styleFrom(
+                              foregroundColor: RefindColors.muted),
+                          child: const Text('ändern'),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 8),

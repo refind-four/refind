@@ -140,5 +140,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Mailadresse oder Passwort ist falsch.'), findsOneWidget);
     });
+
+    testWidgets('zeigt Anzeigename und Mailadresse, kein Platzhalter', (tester) async {
+      await openDeleteDialog(tester);
+      await tester.tap(find.text('Abbrechen'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cara'), findsOneWidget);
+      expect(find.text('cara@refind.test'), findsOneWidget);
+      expect(find.textContaining('PLATZHALTER'), findsNothing);
+      expect(find.text('Abmelden'), findsOneWidget);
+      expect(find.text('Konto löschen'), findsOneWidget);
+    });
   });
 }
