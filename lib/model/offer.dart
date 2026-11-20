@@ -4,8 +4,10 @@ import 'want.dart';
 /// Status eines Angebots (Konzept Abbildung 2).
 enum OfferStatus { neu, gesehen, angenommen, abgesagt }
 
-/// Sortierung der Angebotsliste eines Gesuchs (UC7).
-enum OfferSort { neueste, guenstigste }
+/// Sortierung der Angebotsliste eines Gesuchs (UC7 Schritt 3, F-10, TC18):
+/// «Preis aufsteigend, Preis absteigend oder nach Eingang». Bei gleichem
+/// Preis steht das neuere Angebot zuerst.
+enum OfferSort { neueste, guenstigste, teuerste }
 
 /// Grenzwerte für Angebote (UC6, F-09). Liegen im Paket model, weil Maske
 /// und Repository dieselben Werte prüfen (wie [WantLimits]).
@@ -18,6 +20,11 @@ class OfferLimits {
 
   /// Höchster Preis: wie die höchste Preisobergrenze, CHF 10'000 (Vorschlag).
   static const int maxPriceRappen = WantLimits.maxBudgetRappen;
+
+  /// Grösstes Foto: 5 MB. Derselbe Wert steht als file_size_limit am
+  /// Bucket (supabase/13_speicher.sql). Die App verkleinert Fotos beim
+  /// Auswählen auf 1600 px, damit sind sie meist unter 1 MB.
+  static const int maxPhotoBytes = 5 * 1024 * 1024;
 }
 
 /// Angebot eines Verkäufers zu einem Gesuch (Konzept 2.1).

@@ -419,6 +419,7 @@ class MockRefindRepository implements RefindRepository {
     await _wait();
     // Gemeinsame Prüfung mit SupabaseRefindRepository (input_checks.dart).
     checkOffer(priceRappen, message, photos.length);
+    checkOfferPhotoSizes(fileSizes(photos));
     final want = _want(wantId);
     if (want.ownerId == _me) _forbidden('Auf eigene Gesuche kannst du nicht anbieten.');
     if (want.status != WantStatus.aktiv ||
@@ -470,6 +471,11 @@ class MockRefindRepository implements RefindRepository {
         // Bei gleichem Preis das neuere zuerst, wie bei Supabase.
         list.sort((a, b) {
           final byPrice = a.priceRappen.compareTo(b.priceRappen);
+          return byPrice != 0 ? byPrice : b.createdAt.compareTo(a.createdAt);
+        });
+      case OfferSort.teuerste:
+        list.sort((a, b) {
+          final byPrice = b.priceRappen.compareTo(a.priceRappen);
           return byPrice != 0 ? byPrice : b.createdAt.compareTo(a.createdAt);
         });
     }

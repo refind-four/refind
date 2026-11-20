@@ -29,11 +29,14 @@ class SupabaseConfig {
   static const String publishableKey =
       'sb_publishable_h3FoHWhSjMaR6vpQOP-eGQ__mV15SiE';
 
-  /// Bucket in Supabase Storage für die Fotos der Angebote (UC6, F-09).
-  /// Noch leer: Etienne richtet die Dateiablage bis 26.11.2026 ein. Bis
-  /// dahin werden Angebote ohne Fotos gespeichert. Danach hier den Namen
-  /// eintragen, z.B. 'offer-photos'.
-  static const String? offerPhotoBucket = null;
+  /// Privater Bucket in Supabase Storage für die Fotos der Angebote (UC6,
+  /// F-09), eingerichtet mit supabase/13_speicher.sql. Ohne Bucket (null im
+  /// Repository) speichert die App Angebote ohne Fotos.
+  static const String offerPhotoBucket = 'offer-photos';
+
+  /// Privater Bucket für Fotos im Chat (UC8, F-13). Vorbereitet in
+  /// 13_speicher.sql, die App benutzt ihn erst mit dem Chat.
+  static const String chatPhotoBucket = 'chat-photos';
 }
 
 /// Bereitet das Backend vor. Wird in main() vor runApp aufgerufen.

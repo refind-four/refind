@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import '../model/model.dart';
 import 'repository_exception.dart';
 
@@ -80,3 +82,20 @@ void checkOffer(int priceRappen, String message, int photoCount) {
     _invalid('Höchstens ${OfferLimits.maxPhotos} Fotos pro Angebot.');
   }
 }
+
+/// Prüft die Grösse der Fotos vor dem Hochladen (F-09). [sizes] sind die
+/// Dateigrössen in Bytes. Der Bucket weist zu grosse Dateien zusätzlich ab.
+void checkOfferPhotoSizes(Iterable<int> sizes) {
+  if (sizes.any((s) => s > OfferLimits.maxPhotoBytes)) {
+    _invalid(photoTooLargeMessage);
+  }
+}
+
+/// Meldung für ein zu grosses Foto, in Maske, Mock und Supabase gleich.
+const String photoTooLargeMessage =
+    'Ein Foto ist zu gross (höchstens 5 MB). Bitte wähle ein kleineres.';
+
+/// Grösse der Dateien in Bytes. Eine Datei, die es nicht gibt (z.B. in
+/// Tests), zählt mit 0. Das Hochladen scheitert dann ohnehin.
+List<int> fileSizes(List<File> files) =>
+    [for (final f in files) f.existsSync() ? f.lengthSync() : 0];

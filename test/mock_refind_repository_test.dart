@@ -156,6 +156,27 @@ void main() {
           ['offer-eames-ben-2', 'offer-eames-cara', 'offer-eames-ben-1']);
     });
 
+    test('TC18: Teuerste: Preis absteigend', () async {
+      final offers = await repo.getOffers('want-eames', OfferSort.teuerste);
+      expect(offers.map((o) => o.priceRappen), [210000, 195000, 172000]);
+    });
+
+    test('gleicher Preis: das neuere Angebot zuerst, bei beiden Preis-Sortierungen',
+        () async {
+      // Ben bietet wie Cara CHF 1'950, aber später
+      await repo.signOut();
+      await repo.signIn('ben@refind.test', 'refind123');
+      final same = await repo.createOffer('want-eames', 195000, '', const []);
+      await repo.signOut();
+      await repo.signIn('anna@refind.test', 'refind123');
+
+      List<String> ids(List<Offer> offers) => [for (final o in offers) o.id];
+      expect(ids(await repo.getOffers('want-eames', OfferSort.guenstigste)),
+          ['offer-eames-ben-1', same.id, 'offer-eames-cara', 'offer-eames-ben-2']);
+      expect(ids(await repo.getOffers('want-eames', OfferSort.teuerste)),
+          ['offer-eames-ben-2', same.id, 'offer-eames-cara', 'offer-eames-ben-1']);
+    });
+
     test('fremdes Gesuch: nichtBerechtigt', () async {
       await expectLater(
         repo.getOffers('want-makita', OfferSort.neueste), // gehört Cara

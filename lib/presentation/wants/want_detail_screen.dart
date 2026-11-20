@@ -247,24 +247,24 @@ class _WantDetailScreenState extends State<WantDetailScreen> {
                     ),
                   ],
                   const SizedBox(height: 16),
-                  // Wrap statt Row: Auf schmalen Handys (360 dp) rutschen
-                  // die Sortier-Chips unter die Überschrift statt überzulaufen.
-                  Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    runSpacing: 4,
-                    children: [
-                      Text('ANGEBOTE (${_offers.length})', style: refindLabelStyle),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          _SortChip('Günstigste', OfferSort.guenstigste, _sort,
-                              _changeSort),
-                          _SortChip('Neueste', OfferSort.neueste, _sort, _changeSort),
-                        ],
-                      ),
-                    ],
-                  ),
+                  Text('ANGEBOTE (${_offers.length})', style: refindLabelStyle),
+                  // Sortieren lohnt sich erst ab zwei Angeboten. Die Chips
+                  // stehen in einer eigenen Zeile unter der Überschrift, so
+                  // passen alle drei auch auf 360 dp (F-10, TC18).
+                  if (_offers.length >= 2) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      key: const Key('offer-sort'),
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        _SortChip('Günstigste', OfferSort.guenstigste, _sort,
+                            _changeSort),
+                        _SortChip('Teuerste', OfferSort.teuerste, _sort, _changeSort),
+                        _SortChip('Neueste', OfferSort.neueste, _sort, _changeSort),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -289,9 +289,19 @@ class _WantDetailScreenState extends State<WantDetailScreen> {
       ]);
     }
     if (_offers.isEmpty) {
-      return ListView(padding: const EdgeInsets.all(24), children: const [
-        Text('Noch keine Angebote. Wir sagen dir Bescheid, sobald eines kommt.',
-            style: TextStyle(color: RefindColors.muted)),
+      // Je nach Status ein passender Hinweis: Ein abgelaufenes oder
+      // pausiertes Gesuch bekommt keine Angebote, bis man es wieder aufhängt.
+      final text = switch (StatusLogic.effectiveStatus(_want, DateTime.now())) {
+        WantStatus.abgelaufen =>
+          'Dieses Gesuch ist abgelaufen. Häng es nochmal auf, um Angebote zu bekommen.',
+        WantStatus.pausiert =>
+          'Dieses Gesuch ist pausiert. Aktiviere es, um Angebote zu bekommen.',
+        _ => 'Noch keine Angebote. Wir sagen dir Bescheid, sobald eines kommt.',
+      };
+      return ListView(padding: const EdgeInsets.all(24), children: [
+        Text(text,
+            key: const Key('offers-empty'),
+            style: const TextStyle(color: RefindColors.muted)),
       ]);
     }
     return ListView.separated(
@@ -450,7 +460,10 @@ class _OfferCard extends StatelessWidget {
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
-                  children: [for (final p in offer.photos) OfferPhoto(p.url)],
+                  children: [
+                    for (final p in offer.photos)
+                      OfferPhoto(p.url, enlargeOnTap: true),
+                  ],
                 ),
               ],
               if (canAccept) ...[

@@ -337,6 +337,7 @@ class SupabaseRefindRepository implements RefindRepository {
     List<File> photos,
   ) async {
     checkOffer(priceRappen, message, photos.length);
+    checkOfferPhotoSizes(fileSizes(photos));
     final text = message.trim();
     final me = _me;
     final row = await _guard(() async {
@@ -387,8 +388,8 @@ class SupabaseRefindRepository implements RefindRepository {
     );
   }
 
-  /// Lädt die Fotos hoch und trägt sie in `photo` ein. Ohne [photoBucket]
-  /// (Dateiablage noch nicht eingerichtet) passiert nichts.
+  /// Lädt die Fotos in den privaten Bucket und trägt sie in `photo` ein.
+  /// Ohne [photoBucket] passiert nichts (Angebot ohne Fotos).
   Future<List<Photo>> _uploadOfferPhotos(String offerId, List<File> photos) async {
     final bucket = photoBucket;
     if (photos.isEmpty) return const [];
@@ -401,11 +402,14 @@ class SupabaseRefindRepository implements RefindRepository {
     return _guard(() async {
       final rows = <Map<String, dynamic>>[];
       for (var i = 0; i < photos.length; i++) {
-        final path = '$offerId/${i + 1}.jpg';
+        // Pfad <uid>/<offer_id>/<n>.<typ>: Die Storage-Regel
+        // offer_photos_insert (13_speicher.sql) erlaubt nur den eigenen Ordner.
+        final (ext, mime) = photoFileType(photos[i].path);
+        final path = '$_me/$offerId/${i + 1}.$ext';
         await _client.storage.from(bucket).upload(
               path,
               photos[i],
-              fileOptions: const FileOptions(contentType: 'image/jpeg'),
+              fileOptions: FileOptions(contentType: mime),
             );
         rows.add({'offer_id': offerId, 'url': path});
       }
@@ -425,7 +429,13 @@ class SupabaseRefindRepository implements RefindRepository {
           .eq('want_id', wantId);
       final rows = switch (sort) {
         OfferSort.neueste => await base.order('created_at', ascending: false),
-        OfferSort.guenstigste => await base.order('price', ascending: true),
+        // Bei gleichem Preis das neuere zuerst, wie im Mock
+        OfferSort.guenstigste => await base
+            .order('price', ascending: true)
+            .order('created_at', ascending: false),
+        OfferSort.teuerste => await base
+            .order('price', ascending: false)
+            .order('created_at', ascending: false),
       };
       final offers = rows.map(offerFromRow).toList();
       return _withPhotoUrls(offers);
@@ -433,14 +443,17 @@ class SupabaseRefindRepository implements RefindRepository {
   }
 
   /// Ersetzt die Pfade der Fotos durch Links, die eine Stunde gültig sind.
-  /// Klappt das nicht, bleiben die Pfade (die App zeigt dann ein Symbol).
+  /// Der Bucket ist privat: Einen Link gibt es nur für Fotos, die die Regel
+  /// offer_photos_select (13_speicher.sql) zum Lesen freigibt. Fehlt ein
+  /// Foto oder klappt es nicht, bleibt der Pfad (die App zeigt ein Symbol).
   Future<List<Offer>> _withPhotoUrls(List<Offer> offers) async {
     final bucket = photoBucket;
     final paths = [for (final o in offers) ...o.photos.map((p) => p.url)];
     if (bucket == null || paths.isEmpty) return offers;
     try {
-      final signed = await _client.storage.from(bucket).createSignedUrls(paths, 3600);
-      final urlByPath = {for (final s in signed) s.path: s.signedUrl};
+      final results =
+          await _client.storage.from(bucket).createSignedUrlsResult(paths, 3600);
+      final urlByPath = signedUrlsByPath(results);
       return [
         for (final o in offers)
           Offer(
@@ -702,9 +715,12 @@ Object mapSupabaseError(Object e) {
   // Dateiablage (Fotos der Angebote)
   if (e is StorageException) {
     switch (e.statusCode) {
+      // Grösse und Dateityp prüft der Bucket (13_speicher.sql)
       case '413':
+        return ex(RepositoryErrorKind.ungueltigeEingabe, photoTooLargeMessage);
+      case '415':
         return ex(RepositoryErrorKind.ungueltigeEingabe,
-            'Ein Foto ist zu gross. Bitte wähle ein kleineres.');
+            'Nur Fotos im Format JPEG, PNG oder WebP.');
       case '401':
       case '403':
         return ex(RepositoryErrorKind.nichtBerechtigt,
@@ -752,3 +768,21 @@ Object mapSupabaseError(Object e) {
 
   return e;
 }
+
+/// Dateiendung und Medientyp für ein Foto, nach der Endung der Datei.
+/// Der Bucket erlaubt nur JPEG, PNG und WebP (13_speicher.sql). Alles
+/// andere geht als JPEG, das image_picker beim Verkleinern liefert.
+(String, String) photoFileType(String path) {
+  final lower = path.toLowerCase();
+  if (lower.endsWith('.png')) return ('png', 'image/png');
+  if (lower.endsWith('.webp')) return ('webp', 'image/webp');
+  return ('jpg', 'image/jpeg');
+}
+
+/// Pfad → Link für alle Fotos, für die Supabase einen Link erzeugt hat.
+/// Fehlgeschlagene (z.B. Datei fehlt oder keine Leseberechtigung) fehlen
+/// in der Map, die App zeigt dort ein Symbol statt des Fotos.
+Map<String, String> signedUrlsByPath(List<SignedUrlResult> results) => {
+      for (final r in results)
+        if (r is SignedUrlSuccess) r.path: r.signedUrl,
+    };

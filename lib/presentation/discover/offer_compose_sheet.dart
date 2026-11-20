@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../application/logic/offer_rules.dart';
 import '../../application/logic/price_logic.dart';
 import '../../application/services/offer_service.dart';
+import '../../data/input_checks.dart' show fileSizes, photoTooLargeMessage;
 import '../../data/repository_exception.dart';
 import '../../model/model.dart';
 import '../theme.dart';
@@ -111,9 +112,17 @@ class _OfferComposeSheetState extends State<OfferComposeSheet> {
     if (source == null) return;
     try {
       final file = await widget.pickPhoto(source);
-      if (file != null && mounted && canAddPhoto(_photos.length)) {
-        setState(() => _photos.add(file));
+      if (file == null || !mounted || !canAddPhoto(_photos.length)) return;
+      // Prüfung in der App: zu grosse Fotos gar nicht erst aufnehmen.
+      // Repository und Bucket prüfen dieselbe Grenze noch einmal.
+      if (fileSizes([file]).single > OfferLimits.maxPhotoBytes) {
+        setState(() => _saveError = photoTooLargeMessage);
+        return;
       }
+      setState(() {
+        _photos.add(file);
+        _saveError = null;
+      });
     } catch (_) {
       // z.B. Zugriff auf Kamera verweigert
       if (mounted) {

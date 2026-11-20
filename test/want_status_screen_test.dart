@@ -16,9 +16,12 @@ void main() {
 
   setUp(() => repo = MockRefindRepository(delay: Duration.zero));
 
-  /// Detailmaske zum Gesuch [wantId] öffnen.
-  Future<void> openDetail(WidgetTester tester, String wantId) async {
-    tester.view.physicalSize = const Size(1080, 2340);
+  /// Detailmaske zum Gesuch [wantId] öffnen, auf einem Handy mit 360 dp
+  /// Breite. Mit [tall] ist der Bildschirm hoch genug (1300 dp), damit alle
+  /// Angebote gleichzeitig sichtbar sind und die Reihenfolge prüfbar ist.
+  Future<void> openDetail(WidgetTester tester, String wantId,
+      {bool tall = false}) async {
+    tester.view.physicalSize = Size(1080, tall ? 3900 : 2340);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
     await tester.runAsync(() => repo.signIn('anna@refind.test', 'refind123'));
@@ -93,5 +96,70 @@ void main() {
     await openDetail(tester, 'want-brompton');
     expect(find.byKey(pause), findsNothing);
     expect(find.byKey(republish), findsNothing);
+  });
+
+  group('Angebotsliste (F-10, TC18)', () {
+    /// Preise der Angebotskarten von oben nach unten.
+    List<String?> prices(WidgetTester tester) => tester
+        .widgetList<Text>(find.textContaining(RegExp(r"^CHF \d")))
+        .map((t) => t.data)
+        .toList();
+
+    testWidgets('TC18: drei Sortierungen bei der Eames', (tester) async {
+      await openDetail(tester, 'want-eames', tall: true);
+
+      // Vorgewählt: Günstigste (UC7 Schritt 3)
+      expect(prices(tester), ["CHF 1'720", "CHF 1'950", "CHF 2'100"]);
+      // F-11: das Angebot über CHF 2'000 ist markiert
+      expect(find.text('ÜBER BUDGET +CHF 100'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Teuerste'));
+      await tester.pumpAndSettle();
+      expect(prices(tester), ["CHF 2'100", "CHF 1'950", "CHF 1'720"]);
+      expect(find.text('ÜBER BUDGET +CHF 100'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Neueste'));
+      await tester.pumpAndSettle();
+      // nach Eingang: Ben vor 5 Std, Cara vor 2 Tagen, Ben vor 3 Tagen
+      expect(prices(tester), ["CHF 2'100", "CHF 1'950", "CHF 1'720"]);
+
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Günstigste'));
+      await tester.pumpAndSettle();
+      expect(prices(tester), ["CHF 1'720", "CHF 1'950", "CHF 2'100"]);
+    });
+
+    testWidgets('Sortier-Chips erst ab zwei Angeboten', (tester) async {
+      await openDetail(tester, 'want-leica-m6'); // ein Angebot von Cara
+      expect(find.text('ANGEBOTE (1)'), findsOneWidget);
+      expect(find.byKey(const Key('offer-sort')), findsNothing);
+    });
+
+    testWidgets('keine Angebote: Hinweis je nach Status', (tester) async {
+      await openDetail(tester, 'want-rolex');
+      expect(find.text('ANGEBOTE (0)'), findsOneWidget);
+      expect(find.byKey(const Key('offer-sort')), findsNothing);
+      expect(find.text('Noch keine Angebote. Wir sagen dir Bescheid, sobald eines kommt.'),
+          findsOneWidget);
+
+      // nach Pausieren passt der Hinweis sich an
+      await tester.tap(find.byKey(pause));
+      await tester.pumpAndSettle();
+      expect(find.text('Dieses Gesuch ist pausiert. Aktiviere es, um Angebote zu bekommen.'),
+          findsOneWidget);
+    });
+
+    testWidgets('abgelaufen (Technics): Hinweis statt «Wir sagen dir Bescheid»',
+        (tester) async {
+      await openDetail(tester, 'want-technics');
+      expect(
+          find.text('Dieses Gesuch ist abgelaufen. '
+              'Häng es nochmal auf, um Angebote zu bekommen.'),
+          findsOneWidget);
+      expect(find.textContaining('Wir sagen dir Bescheid'), findsNothing);
+
+      await tester.tap(find.byKey(republish));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Wir sagen dir Bescheid'), findsOneWidget);
+    });
   });
 }
