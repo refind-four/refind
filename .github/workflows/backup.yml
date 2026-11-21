@@ -1,0 +1,104 @@
+# Datensicherung der Supabase-Datenbank (Konzept 4.4, Verfügbarkeit):
+# «täglicher Export der Datenbank mit pg_dump über einen geplanten Ablauf in
+# GitHub Actions, zusätzlich vor jeder Abgabe».
+#
+# Läuft jeden Tag um 02:30 UTC und lässt sich unter «Actions» → «Datenbank-
+# Backup» → «Run workflow» von Hand starten (z.B. vor einer Abgabe).
+#
+# Ergebnis: ein Artifact «refind-backup-<datum>» mit der verschlüsselten Datei
+# refind-backup.tar.gz.gpg, 30 Tage aufbewahrt. Inhalt (entschlüsselt):
+#   schema.sql       Tabellen, RLS-Regeln, Rechte, Funktionen (public, private)
+#   data_public.sql  Daten aller Tabellen in public (Profile, Gesuche, …)
+#   data_auth.sql    Anmeldekonten: auth.users und auth.identities
+# Nicht enthalten: Fotos in Supabase Storage (Dateien liegen nicht in der
+# Datenbank), Buckets und Storage-Regeln, pg_cron-Auftrag, Publication und
+# der Trigger auf auth.users. Diese stellen die SQL-Dateien 04, 12–15 wieder her.
+#
+# Secrets (Repository → Settings → Secrets and variables → Actions):
+#   SUPABASE_DB_URL     Verbindungsadresse «Session pooler» aus Supabase
+#   BACKUP_PASSPHRASE   Passwort für die Verschlüsselung des Backups
+# Beide stehen nie im Code und erscheinen im Log nur als ***.
+# Wiederherstellen: docs/installation_fakten.md, Abschnitt 8.
+
+name: Datenbank-Backup
+
+on:
+  schedule:
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Secrets vorhanden?
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          test -n "$DB_URL" || { echo "::error::Secret SUPABASE_DB_URL fehlt"; exit 1; }
+          test -n "$PASSPHRASE" || { echo "::error::Secret BACKUP_PASSPHRASE fehlt"; exit 1; }
+
+      # pg_dump muss mindestens so neu sein wie der Server (Supabase: PostgreSQL
+      # 15 oder 17). Ubuntu bringt eine ältere Version mit, darum Version 17
+      # aus dem offiziellen Paketarchiv von PostgreSQL.
+      - name: PostgreSQL-Client 17 installieren
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          /usr/lib/postgresql/17/bin/pg_dump --version
+
+      - name: Datenbank sichern (pg_dump)
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          PG_DUMP=/usr/lib/postgresql/17/bin/pg_dump
+          mkdir backup
+
+          # Struktur: Tabellen, RLS-Regeln, Rechte, Funktionen
+          "$PG_DUMP" "$DB_URL" --schema-only --no-owner \
+            --schema=public --schema=private --file=backup/schema.sql
+
+          # Daten der App-Tabellen
+          "$PG_DUMP" "$DB_URL" --data-only --no-owner \
+            --schema=public --file=backup/data_public.sql
+
+          # Anmeldekonten (profile verweist auf auth.users)
+          "$PG_DUMP" "$DB_URL" --data-only --no-owner \
+            --table=auth.users --table=auth.identities --file=backup/data_auth.sql
+
+          ls -l backup
+
+      # Das Backup enthält Mailadressen und Passwort-Hashes (N-04, N-05).
+      # Artifacts sieht jeder mit Lesezugriff auf das Repository, darum wird
+      # es vor dem Hochladen verschlüsselt (AES-256).
+      - name: Packen und verschlüsseln
+        env:
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          tar -czf refind-backup.tar.gz backup
+          printf '%s' "$PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback \
+            --passphrase-fd 0 --symmetric --cipher-algo AES256 \
+            --output refind-backup.tar.gz.gpg refind-backup.tar.gz
+          rm -rf backup refind-backup.tar.gz
+          echo "STAMP=$(date -u +%Y-%m-%d_%H%M)" >> "$GITHUB_ENV"
+
+      - name: Als Artifact ablegen (30 Tage)
+        uses: actions/upload-artifact@v4
+        with:
+          name: refind-backup-${{ env.STAMP }}
+          path: refind-backup.tar.gz.gpg
+          retention-days: 30
+          if-no-files-found: error
